@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments & Virtual Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# Audio cache & temporary test recordings
+sounds/cache/*
+!sounds/cache/.gitkeep
+test_*_cache/
+*.mp3
+
+# Log files
+*.log
+/var/log/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
