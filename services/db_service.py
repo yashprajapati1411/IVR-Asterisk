@@ -86,8 +86,8 @@ class DatabaseService:
         cursor.execute("SELECT COUNT(*) as cnt FROM doctors")
         if cursor.fetchone()["cnt"] == 0:
             doctors = [
-                (1, "Dr. Shaishav", "ડૉક્ટર શૈશવ", "General Physician", "જનરલ ફિઝિશિયન", 1),
-                (2, "Dr. Jaydeep", "ડૉક્ટર જયદીપ", "Cardiologist", "હૃદયરોગ નિષ્ણાત", 1)
+                (1, "Dr. Shaishav Soni", "ડૉક્ટર શૈશવ સોની", "Orthopedic Surgeon", "ઓર્થોપેડિક સર્જન", 1),
+                (2, "Dr. Jaydeep Patel", "ડૉક્ટર જયદીપ પટેલ", "Spine Specialist", "કરોડરજ્જુ નિષ્ણાત", 1)
             ]
             cursor.executemany(
                 "INSERT INTO doctors (id, name_en, name_gu, specialty_en, specialty_gu, is_active) VALUES (?, ?, ?, ?, ?, ?)",
@@ -98,9 +98,9 @@ class DatabaseService:
             schedules = []
             for day in range(7):
                 # Dr. Shaishav: 5:00 PM to 8:00 PM (10 slots)
-                schedules.append((1, day, "17:00", "20:00", "સાંજે 5:00 વાગ્યે", "5:00 PM", 10, 1))
+                schedules.append((1, day, "17:00", "20:00", "સાંજે 5:00 થી 8:00 વાગ્યા સુધી", "5:00 PM to 8:00 PM", 10, 1))
                 # Dr. Jaydeep: 10:00 AM to 1:00 PM (8 slots)
-                schedules.append((2, day, "10:00", "13:00", "સવારે 10:00 વાગ્યે", "10:00 AM", 8, 1))
+                schedules.append((2, day, "10:00", "13:00", "સવારે 10:00 થી બપોરે 1:00 વાગ્યા સુધી", "10:00 AM to 1:00 PM", 8, 1))
                 
             cursor.executemany(
                 """INSERT INTO doctor_schedules 
@@ -274,6 +274,7 @@ class DatabaseService:
             return {
                 "success": True,
                 "appointment_id": appointment_id,
+                "appointment_number": appointment_id,
                 "appointment_code": appointment_code,
                 "doctor_id": doctor_id,
                 "doctor_name_gu": doctor["name_gu"],

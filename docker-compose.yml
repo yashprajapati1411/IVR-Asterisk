@@ -3,18 +3,25 @@ services:
     build: .
     container_name: asterisk-gujarati-ivr
     restart: unless-stopped
-    network_mode: "host" # Recommended for Asterisk RTP/SIP on Linux
+    # network_mode: "host" # Recommended for Asterisk RTP/SIP on Linux
     environment:
       - SARVAM_API_KEY=${SARVAM_API_KEY:-""}
       - ASTERISK_SOUNDS_DIR=/var/lib/asterisk/sounds/ivr
+      - ASTERISK_CACHE_DIR=/var/lib/asterisk/sounds/ivr/cache
       - PYTHONUNBUFFERED=1
     volumes:
       - ./data:/app/data
+      - ./sounds/gu:/var/lib/asterisk/sounds/ivr/gu
       - ./sounds/cache:/var/lib/asterisk/sounds/ivr/cache
       - ./ivr_appointments.db:/app/ivr_appointments.db
-    # If not using host networking on Linux (e.g. Docker Desktop on Mac/Windows):
-    # ports:
-    #   - "5060:5060/udp"
-    #   - "5060:5060/tcp"
-    #   - "4573:4573"
-    #   - "10000-10100:10000-10100/udp"
+      - ./asterisk_config/extensions.conf:/etc/asterisk/extensions.conf
+      - ./asterisk_config/pjsip.conf:/etc/asterisk/pjsip.conf
+      - ./asterisk_config/rtp.conf:/etc/asterisk/rtp.conf
+      - ./docker-entrypoint.sh:/app/docker-entrypoint.sh
+      - ./agi:/app/agi
+      - ./services:/app/services
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "4573:4573"
+      - "10000-10100:10000-10100/udp"

@@ -75,7 +75,10 @@ class AGIChannel:
         match = re.search(r"result=([^\s]+)", resp)
         result_val = match.group(1) if match else ""
 
-        if status_code in (511, -1) or result_val == "-1":
+        # Status 511 indicates Asterisk channel is dead/hung up.
+        # -1 indicates connection error.
+        # Note: result=-1 does NOT mean hungup! It is returned on timeout, silence, or non-fatal command errors.
+        if status_code in (511, -1):
             self.is_hungup = True
 
         return status_code, result_val, resp

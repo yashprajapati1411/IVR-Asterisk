@@ -5,26 +5,52 @@ and audio conversion to Asterisk 8kHz mono PCM WAV with 1.5x speed.
 """
 import os
 import io
+import sys
 import wave
 import hashlib
 import logging
 import base64
+import shutil
 import subprocess
 import requests
 from typing import Optional
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 logger = logging.getLogger("TTSService")
 
 SARVAM_TTS_URL = "https://api.sarvam.ai/text-to-speech"
-CACHE_DIR = os.getenv(
-    "ASTERISK_CACHE_DIR",
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds", "cache")
-)
+env_cache = os.getenv("ASTERISK_CACHE_DIR", "").strip()
+env_sounds = os.getenv("ASTERISK_SOUNDS_DIR", "").strip()
+if env_cache:
+    CACHE_DIR = env_cache
+elif env_sounds:
+    CACHE_DIR = os.path.join(env_sounds, "cache")
+else:
+    CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds", "cache")
+
+def _convert_to_asterisk_wav(input_path: str, output_wav: str) -> bool:
+    """Converts any audio file to Asterisk 8000Hz 16-bit mono PCM WAV using ffmpeg or sox."""
+    ffmpeg_bin = shutil.which("ffmpeg") or (r"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe" if os.path.exists(r"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe") else None)
+    sox_bin = shutil.which("sox")
+
+    if ffmpeg_bin:
+        cmd = [ffmpeg_bin, "-y", "-i", input_path, "-ar", "8000", "-ac", "1", "-sample_fmt", "s16", output_wav]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return res.returncode == 0
+    elif sox_bin:
+        cmd = [sox_bin, input_path, "-r", "8000", "-c", "1", "-b", "16", output_wav]
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return res.returncode == 0
+    return False
 
 class TTSService:
-    def __init__(self, api_key: Optional[str] = None, cache_dir: str = CACHE_DIR, speed_rate: str = "+45%"):
+    def __init__(self, api_key: Optional[str] = None, cache_dir: Optional[str] = None, speed_rate: str = "+45%"):
         self.api_key = api_key or os.getenv("SARVAM_API_KEY", "")
-        self.cache_dir = cache_dir
+        self.cache_dir = (cache_dir.strip() if cache_dir and cache_dir.strip() else CACHE_DIR)
         self.speed_rate = speed_rate # 1.5x speed rate
         os.makedirs(self.cache_dir, exist_ok=True)
 
@@ -42,8 +68,8 @@ class TTSService:
         if os.path.exists(cache_path) and os.path.getsize(cache_path) > 1000:
             return cache_path
 
-        # 1. Try Sarvam TTS if key provided
-        if self.api_key and not self.api_key.startswith("mock") and len(self.api_key) > 5:
+        # 1. Try Sarvam TTS (bulbul:v3) if key provided and not previously failed with quota error
+        if self.api_key and not self.api_key.startswith("mock") and len(self.api_key) > 5 and getattr(self, "_sarvam_active", True):
             try:
                 headers = {
                     "api-subscription-key": self.api_key,
@@ -52,48 +78,65 @@ class TTSService:
                 payload = {
                     "inputs": [text],
                     "target_language_code": "gu-IN",
-                    "speaker": "meera",
+                    "speaker": "pooja",
                     "pitch": 0,
-                    "pace": 1.4, # 1.4x-1.5x speed
+                    "pace": 1.4,
                     "loudness": 1.5,
                     "speech_sample_rate": 8000,
                     "enable_preprocessing": True,
-                    "model": "bulbul:v1"
+                    "model": "bulbul:v3"
                 }
-                res = requests.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=10.0)
+                res = requests.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=5.0)
                 if res.status_code == 200:
                     audios = res.json().get("audios", [])
                     if audios:
                         raw_audio = base64.b64decode(audios[0])
                         with open(cache_path, "wb") as f:
                             f.write(raw_audio)
-                        logger.info(f"Synthesized Gujarati audio via Sarvam TTS -> {cache_path}")
+                        logger.info(f"Synthesized Gujarati audio via Sarvam TTS (bulbul:v3) -> {cache_path}")
                         return cache_path
+                else:
+                    if res.status_code in (401, 402, 403):
+                        self._sarvam_active = False
+                    logger.warning(f"Sarvam TTS returned status {res.status_code}: {res.text}")
             except Exception as e:
                 logger.warning(f"Sarvam TTS failed, trying edge-tts: {e}")
 
         # 2. Try Edge-TTS (gu-IN-DhwaniNeural) with 1.5x speed
         try:
             temp_mp3 = cache_path.replace(".wav", ".mp3")
-            cmd_edge = [
-                "edge-tts",
-                "--voice", "gu-IN-DhwaniNeural",
-                f"--rate={self.speed_rate}",
-                "--text", text,
-                "--write-media", temp_mp3
-            ]
-            subprocess.run(cmd_edge, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            # Convert to Asterisk 8000Hz 16-bit mono PCM wav using sox
-            cmd_sox = ["sox", temp_mp3, "-r", "8000", "-c", "1", "-b", "16", cache_path]
-            subprocess.run(cmd_sox, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            if os.path.exists(temp_mp3):
-                os.remove(temp_mp3)
-                
-            if os.path.exists(cache_path) and os.path.getsize(cache_path) > 500:
-                logger.info(f"Synthesized Gujarati audio via Edge-TTS (1.5x) -> {cache_path}")
-                return cache_path
+            try:
+                import edge_tts
+                import asyncio
+                communicate = edge_tts.Communicate(text, "gu-IN-DhwaniNeural", rate=self.speed_rate)
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Running in an active async event loop
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            executor.submit(lambda: asyncio.run(communicate.save(temp_mp3))).result()
+                    else:
+                        loop.run_until_complete(communicate.save(temp_mp3))
+                except Exception:
+                    asyncio.run(communicate.save(temp_mp3))
+            except Exception:
+                cmd_edge = [
+                    sys.executable, "-m", "edge_tts",
+                    "--voice", "gu-IN-DhwaniNeural",
+                    f"--rate={self.speed_rate}",
+                    "--text", text,
+                    "--write-media", temp_mp3
+                ]
+                subprocess.run(cmd_edge, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            if os.path.exists(temp_mp3) and os.path.getsize(temp_mp3) > 100:
+                if _convert_to_asterisk_wav(temp_mp3, cache_path):
+                    if os.path.exists(temp_mp3):
+                        os.remove(temp_mp3)
+                    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 500:
+                        logger.info(f"Synthesized Gujarati audio via Edge-TTS (1.5x) -> {cache_path}")
+                        return cache_path
         except Exception as e:
             logger.warning(f"Edge-TTS failed: {e}")
 

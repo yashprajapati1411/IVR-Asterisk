@@ -11,6 +11,11 @@ import re
 import logging
 import requests
 from typing import Optional, Dict, Any
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 logger = logging.getLogger("STTService")
 
@@ -62,6 +67,15 @@ def extract_clean_name(text: str) -> str:
     if words and all(w.isascii() for w in words):
         t = ' '.join(w.capitalize() for w in words)
         
+    # Check if text is just an intro phrase without an actual name
+    intro_phrases = {
+        "મારું નામ", "મારૂ નામ", "મારુ નામ", "મારું", "મારૂ", "નામ",
+        "my name", "my name is", "this is", "i am", "myself",
+        "मेरा नाम", "મેરા નામ", "હું", "હૂં", "હેલો", "નમસ્તે", "hello", "hi"
+    }
+    if t.lower() in intro_phrases:
+        return ""
+
     return t
 
 class SarvamSTTService:

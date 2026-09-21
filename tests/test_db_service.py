@@ -22,12 +22,12 @@ def test_db():
 def test_doctors_and_schedules_seeded(test_db):
     doc1 = test_db.get_doctor(1)
     assert doc1 is not None
-    assert doc1["name_en"] == "Dr. Shaishav"
+    assert "Dr. Shaishav" in doc1["name_en"]
     assert "શૈશવ" in doc1["name_gu"]
 
     doc2 = test_db.get_doctor(2)
     assert doc2 is not None
-    assert doc2["name_en"] == "Dr. Jaydeep"
+    assert "Dr. Jaydeep" in doc2["name_en"]
     assert "જયદીપ" in doc2["name_gu"]
 
 def test_check_availability(test_db):

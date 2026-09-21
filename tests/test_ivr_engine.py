@@ -123,7 +123,7 @@ async def test_path_dr_jaydeep(setup_env):
 
     assert engine.session.state == "DONE"
     assert engine.session.selected_doctor_id == 2
-    assert engine.session.selected_doctor_name_en == "Dr. Jaydeep"
+    assert "Dr. Jaydeep" in engine.session.selected_doctor_name_en
     assert engine.session.patient_name_gu == "પ્રિયાબેન શાહ"
     assert "APT-" in engine.session.appointment_code
 
@@ -140,6 +140,28 @@ async def test_path_other_information(setup_env):
     assert engine.session.state == "HANGUP"
     assert any("other_info" in cmd for cmd in channel.files_streamed)
     assert engine.session.selected_doctor_id is None
+
+@pytest.mark.asyncio
+async def test_other_information_return_to_main_menu(setup_env):
+    db, stt, tts = setup_env
+    # 1: Welcome -> 3 (Other info)
+    # 2: At Other info -> 1 (Return to Main Menu)
+    # 3: At Welcome -> 1 (Dr. Shaishav)
+    # 4: Slots -> 1 (Confirm booking)
+    # 5: Mobile -> 9825012345
+    # 6: Mobile confirm -> 1
+    # 7: Name confirm -> 1
+    # 8: Final confirm -> 1
+    stt.set_mock_name("યશ")
+    inputs = ["3", "1", "1", "1", "9825012345", "1", "1", "1"]
+    channel = MockAGIChannel(inputs=inputs)
+    engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
+
+    await engine.run()
+
+    assert any("other_info" in cmd for cmd in channel.files_streamed)
+    assert engine.session.selected_doctor_id == 1
+    assert engine.session.state == "DONE"
 
 @pytest.mark.asyncio
 async def test_no_slots_and_main_menu(setup_env):

@@ -21,8 +21,8 @@ from services.stt_service import SarvamSTTService
 from services.tts_service import TTSService
 
 PROMPT_DESCRIPTIONS = {
-    "welcome_menu": "નમસ્તે, ડૉક્ટર એપોઇન્ટમેન્ટ સિસ્ટમમાં તમારું સ્વાગત છે.\n[1] Dr. Shaishav | [2] Dr. Jaydeep | [3] Other Info",
-    "other_info": "અમારી હોસ્પિટલ સોમવાર થી શનિવાર સવારે 9 થી સાંજે 8 સુધી ખુલ્લી છે. ઇમરજન્સી સેવા 24 કલાક ઉપલબ્ધ છે. (Playing other info & hanging up...)",
+    "welcome_menu": "ત્રિણય ઓર્થોપેડિક હોસ્પિટલમાં આપનું સ્વાગત છે.\n[1] Dr. Shaishav Soni | [2] Dr. Jaydeep Patel | [3] Other Info",
+    "other_info": "ફીસની માહિતી. નવા કેસનો ચાર્જ 600 રૂપિયા છે. જૂના કેસના 300 રૂપિયા છે. જોઈન્ટના દુખાવા માટે ડૉક્ટર શૈશવ સોની અને કરોડરજ્જુ માટે ડૉક્ટર જયદીપ પટેલ. (Playing hospital other info & hanging up...)",
     "no_slots_today": "આજે ડૉક્ટર માટે કોઈ સ્લોટ ઉપલબ્ધ નથી. [2] મુખ્ય મેનુ માટે 2 દબાવો.",
     "enter_mobile": "તમારો 10 અંકનો મોબાઇલ નંબર દાખલ કરો અને # દબાવો:",
     "invalid_mobile": "અમાન્ય મોબાઇલ નંબર. કૃપા કરીને 10 અંકનો માન્ય નંબર દાખલ કરો.",
@@ -127,9 +127,24 @@ async def run_simulation(inputs=None, interactive=True):
     return engine.session
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Asterisk Gujarati Doctor Appointment IVR Simulator")
+    parser.add_argument("--auto", action="store_true", help="Run automated simulation non-interactively")
+    args = parser.parse_args()
+
     print("Welcome to Asterisk Gujarati Doctor Appointment IVR Simulator!")
-    print("This simulator lets you test the complete flow interactively.\n")
-    asyncio.run(run_simulation(interactive=True))
+    print("This simulator lets you test the complete flow.\n")
+
+    if args.auto:
+        # Automated flow: Dr. Shaishav (1), Book (1), Mobile (9876543210#), Confirm Mobile (1), Name ("ભાવેશભાઈ પટેલ"), Confirm Name (1), Final Book (1)
+        inputs = ["1", "1", "9876543210#", "1", "ભાવેશભાઈ પટેલ", "1", "1"]
+        session = asyncio.run(run_simulation(inputs=inputs, interactive=False))
+        print(f"\n[Automated Simulation Complete] Final State: {session.state}")
+        print(f"Doctor: {session.selected_doctor_name_gu} ({session.selected_doctor_name_en})")
+        print(f"Patient: {session.patient_name_gu} | Mobile: {session.mobile_number}")
+        print(f"Appointment ID: {session.appointment_id} | Code: {session.appointment_code}")
+    else:
+        asyncio.run(run_simulation(interactive=True))
 
 if __name__ == "__main__":
     main()

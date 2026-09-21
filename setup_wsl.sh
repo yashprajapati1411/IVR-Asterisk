@@ -6,12 +6,13 @@ export DEBIAN_FRONTEND=noninteractive
 
 # 1. Update and install Asterisk and Python
 apt-get update
-apt-get install -y asterisk asterisk-modules asterisk-core-sounds-en python3 python3-pip python3-venv sox net-tools
+apt-get install -y --allow-unauthenticated asterisk asterisk-modules asterisk-core-sounds-en sox net-tools
 
 # 2. Setup Python environment
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
-pip3 install --break-system-packages -r requirements.txt
+curl -sS https://bootstrap.pypa.io/get-pip.py | python3
+pip3 install -r requirements.txt
 
 # 3. Copy Configuration Files to Asterisk
 cp asterisk_config/extensions.conf /etc/asterisk/

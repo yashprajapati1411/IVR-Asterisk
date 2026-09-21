@@ -8,6 +8,11 @@ import argparse
 import logging
 import sys
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Add project root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,7 +24,7 @@ from services.stt_service import SarvamSTTService
 from services.tts_service import TTSService
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s"
 )
 logger = logging.getLogger("FastAGIServer")

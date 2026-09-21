@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     sox \
+    libsox-fmt-all \
+    ffmpeg \
     curl \
     sqlite3 \
     net-tools \
@@ -22,7 +24,7 @@ WORKDIR /app
 
 # Setup Python environment
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy application source code
 COPY agi/ /app/agi/

@@ -20,6 +20,7 @@ ENV/
 # Audio cache & temporary test recordings
 sounds/cache/*
 !sounds/cache/.gitkeep
+sounds/gu/tts_*.wav
 test_*_cache/
 *.mp3
 
@@ -41,3 +42,6 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# Temporary scripts
+get-pip.py
