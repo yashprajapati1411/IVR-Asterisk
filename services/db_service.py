@@ -97,10 +97,16 @@ class DatabaseService:
             # Schedules: Every day (0 to 6)
             schedules = []
             for day in range(7):
-                # Dr. Shaishav: 5:00 PM to 8:00 PM (10 slots)
-                schedules.append((1, day, "17:00", "20:00", "સાંજે 5:00 થી 8:00 વાગ્યા સુધી", "5:00 PM to 8:00 PM", 10, 1))
-                # Dr. Jaydeep: 10:00 AM to 1:00 PM (8 slots)
-                schedules.append((2, day, "10:00", "13:00", "સવારે 10:00 થી બપોરે 1:00 વાગ્યા સુધી", "10:00 AM to 1:00 PM", 8, 1))
+                # Dr. Shaishav Soni (Doctor 1): 3 hourly slots (5 PM-6 PM, 6 PM-7 PM, 7 PM-8 PM), max 8 each
+                schedules.append((1, day, "17:00", "18:00", "સાંજે 5:00 થી 6:00", "5:00 PM to 6:00 PM", 8, 1))
+                schedules.append((1, day, "18:00", "19:00", "સાંજે 6:00 થી 7:00", "6:00 PM to 7:00 PM", 8, 1))
+                schedules.append((1, day, "19:00", "20:00", "સાંજે 7:00 થી 8:00", "7:00 PM to 8:00 PM", 8, 1))
+
+                # Dr. Jaydeep Patel (Doctor 2): 4 hourly slots (10 AM-11 AM, 11 AM-12 PM, 12 PM-1 PM, 1 PM-2 PM), max 8 each
+                schedules.append((2, day, "10:00", "11:00", "સવારે 10:00 થી 11:00", "10:00 AM to 11:00 AM", 8, 1))
+                schedules.append((2, day, "11:00", "12:00", "સવારે 11:00 થી 12:00", "11:00 AM to 12:00 PM", 8, 1))
+                schedules.append((2, day, "12:00", "13:00", "બપોરે 12:00 થી 1:00", "12:00 PM to 1:00 PM", 8, 1))
+                schedules.append((2, day, "13:00", "14:00", "બપોરે 1:00 થી 2:00", "1:00 PM to 2:00 PM", 8, 1))
                 
             cursor.executemany(
                 """INSERT INTO doctor_schedules 
@@ -120,8 +126,8 @@ class DatabaseService:
 
     def check_availability(self, doctor_id: int, target_date: Optional[str] = None) -> Dict[str, Any]:
         """
-        Checks today's (or given date's) slot availability for a doctor.
-        Returns dict with available=True/False and slot details.
+        Checks today's (or given date's) hourly slot availability for a doctor.
+        Returns dict with available=True/False and list of available hourly slots.
         """
         if not target_date:
             target_date = datetime.date.today().isoformat()
@@ -132,42 +138,57 @@ class DatabaseService:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        # Get schedule for this doctor and day of week
+        # Get schedules for this doctor and day of week
         cursor.execute("""
             SELECT * FROM doctor_schedules 
             WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
+            ORDER BY start_time ASC
         """, (doctor_id, day_of_week))
-        schedule = cursor.fetchone()
+        schedules = cursor.fetchall()
 
-        if not schedule:
+        if not schedules:
             conn.close()
             return {
                 "available": False,
                 "reason": "NO_SCHEDULE",
                 "doctor_id": doctor_id,
-                "date": target_date
+                "date": target_date,
+                "slots": []
             }
 
-        # Count booked appointments for this doctor on target_date
-        cursor.execute("""
-            SELECT COUNT(*) as booked FROM appointments 
-            WHERE doctor_id = ? AND appointment_date = ? AND status = 'CONFIRMED'
-        """, (doctor_id, target_date))
-        booked_count = cursor.fetchone()["booked"]
-        max_slots = schedule["max_slots"]
-        slots_left = max_slots - booked_count
+        available_slots = []
+        for s in schedules:
+            slot_time_gu = s["slot_time_gu"]
+            max_slots = s["max_slots"]
+
+            cursor.execute("""
+                SELECT COUNT(*) as booked FROM appointments 
+                WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status = 'CONFIRMED'
+            """, (doctor_id, target_date, slot_time_gu))
+            booked_count = cursor.fetchone()["booked"]
+            slots_left = max_slots - booked_count
+
+            if slots_left > 0:
+                available_slots.append({
+                    "slot_time_gu": slot_time_gu,
+                    "slot_time_en": s["slot_time_en"],
+                    "start_time": s["start_time"],
+                    "end_time": s["end_time"],
+                    "max_slots": max_slots,
+                    "booked_count": booked_count,
+                    "slots_left": slots_left
+                })
 
         conn.close()
 
-        if slots_left > 0:
+        if available_slots:
             return {
                 "available": True,
                 "doctor_id": doctor_id,
                 "date": target_date,
-                "slot_time_gu": schedule["slot_time_gu"],
-                "slot_time_en": schedule["slot_time_en"],
-                "slots_left": slots_left,
-                "max_slots": max_slots
+                "slots": available_slots,
+                "slot_time_gu": available_slots[0]["slot_time_gu"],
+                "slot_time_en": available_slots[0]["slot_time_en"]
             }
         else:
             return {
@@ -175,7 +196,7 @@ class DatabaseService:
                 "reason": "SLOTS_FULL",
                 "doctor_id": doctor_id,
                 "date": target_date,
-                "slots_left": 0
+                "slots": []
             }
 
     def book_appointment(
@@ -183,12 +204,13 @@ class DatabaseService:
         doctor_id: int,
         mobile_number: str,
         patient_name_gu: str,
-        target_date: Optional[str] = None
+        target_date: Optional[str] = None,
+        slot_time_gu: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Executes atomic database transaction:
         1. Locks doctor & date with BEGIN IMMEDIATE.
-        2. Verifies availability.
+        2. Verifies hourly slot availability.
         3. Creates/upserts patient.
         4. Creates appointment.
         5. Returns appointment code and details.
@@ -214,24 +236,36 @@ class DatabaseService:
                 conn.close()
                 return {"success": False, "error": "DOCTOR_NOT_FOUND"}
 
-            # Verify schedule and capacity
-            cursor.execute("""
-                SELECT * FROM doctor_schedules 
-                WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
-            """, (doctor_id, day_of_week))
-            schedule = cursor.fetchone()
+            # Verify schedule and capacity for selected slot
+            if slot_time_gu:
+                cursor.execute("""
+                    SELECT * FROM doctor_schedules 
+                    WHERE doctor_id = ? AND day_of_week = ? AND slot_time_gu = ? AND is_active = 1
+                """, (doctor_id, day_of_week, slot_time_gu))
+                schedule = cursor.fetchone()
+            else:
+                cursor.execute("""
+                    SELECT * FROM doctor_schedules 
+                    WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
+                    ORDER BY start_time ASC
+                """, (doctor_id, day_of_week))
+                schedule = cursor.fetchone()
+
             if not schedule:
                 cursor.execute("ROLLBACK")
                 conn.close()
                 return {"success": False, "error": "NO_SCHEDULE"}
 
+            target_slot_time_gu = schedule["slot_time_gu"]
+            max_slots = schedule["max_slots"]
+
             cursor.execute("""
                 SELECT COUNT(*) as booked FROM appointments 
-                WHERE doctor_id = ? AND appointment_date = ? AND status = 'CONFIRMED'
-            """, (doctor_id, target_date))
+                WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status = 'CONFIRMED'
+            """, (doctor_id, target_date, target_slot_time_gu))
             booked_count = cursor.fetchone()["booked"]
 
-            if booked_count >= schedule["max_slots"]:
+            if booked_count >= max_slots:
                 cursor.execute("ROLLBACK")
                 conn.close()
                 return {"success": False, "error": "SLOTS_FULL"}
@@ -258,14 +292,12 @@ class DatabaseService:
             total = cursor.fetchone()["total_appts"]
             appointment_code = f"APT-{1000 + total + 1}"
 
-            slot_time = schedule["slot_time_gu"]
-
             # Insert appointment
             cursor.execute("""
                 INSERT INTO appointments 
                 (appointment_code, doctor_id, patient_id, appointment_date, slot_time, status)
                 VALUES (?, ?, ?, ?, ?, 'CONFIRMED')
-            """, (appointment_code, doctor_id, patient_id, target_date, slot_time))
+            """, (appointment_code, doctor_id, patient_id, target_date, target_slot_time_gu))
             appointment_id = cursor.lastrowid
 
             cursor.execute("COMMIT")
@@ -282,7 +314,7 @@ class DatabaseService:
                 "patient_name_gu": patient_name_gu,
                 "mobile_number": mobile_number,
                 "appointment_date": target_date,
-                "slot_time_gu": slot_time,
+                "slot_time_gu": target_slot_time_gu,
                 "slot_time_en": schedule["slot_time_en"]
             }
 

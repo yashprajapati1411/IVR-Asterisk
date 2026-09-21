@@ -206,13 +206,12 @@ class IVREngine:
         self.session.state = "HANGUP"
 
     # -------------------------------------------------------------------------
-    # 3. CHECK TODAY'S AVAILABILITY
+    # 3. CHECK TODAY'S HOURLY SLOT AVAILABILITY
     # -------------------------------------------------------------------------
     async def _state_check_availability(self):
         """
-        Checks today's availability for selected doctor.
-        AVAILABLE: Play slot timing -> Press 1 Booking, Press 2 Main Menu
-        NOT AVAILABLE: 'આજે ડોક્ટર માટે કોઈ સ્લોટ ઉપલબ્ધ નથી' -> Press 2 Main Menu
+        Checks today's hourly slot availability for selected doctor.
+        Presents available hourly slots (max 8 per slot) to the caller.
         """
         doctor_id = self.session.selected_doctor_id
         avail = self.db.check_availability(doctor_id)
@@ -229,25 +228,37 @@ class IVREngine:
             self.session.state = "WELCOME"
             return
 
-        slot_time_gu = avail.get("slot_time_gu", "સાંજે 5:00 થી 8:00 વાગ્યા સુધી")
-        self.session.selected_slot_time_gu = slot_time_gu
+        slots = avail.get("slots", [])
+        if not slots:
+            await self.channel.stream_file(self._sound("gu/no_slots_today"))
+            self.session.state = "WELCOME"
+            return
+
         self.session.selected_date = avail.get("date", "")
 
-        if doctor_id == 1 and "5:00 થી 8:00" in slot_time_gu:
-            prompt_path = self._sound("gu/avail_shaishav")
-        elif doctor_id == 2 and "10:00 થી" in slot_time_gu:
-            prompt_path = self._sound("gu/avail_jaydeep")
-        else:
-            slot_text = f"{self.session.selected_doctor_name_gu} આજે {slot_time_gu} ઉપલબ્ધ છે. એપોઇન્ટમેન્ટ બુક કરવા માટે 1 દબાવો. મુખ્ય મેનુ માટે 2 દબાવો."
-            prompt_path = self._sound(self.tts.synthesize_gujarati(slot_text))
+        # Build prompt listing available slots
+        # E.g.: "ડૉક્ટર શૈશવ સોની માટે ઉપલબ્ધ સ્લોટ: સાંજે 5:00 થી 6:00 માટે 1 દબાવો..."
+        prompt_parts = [f"{self.session.selected_doctor_name_gu} માટે ઉપલબ્ધ સ્લોટ: "]
+        slot_mapping = {}
+
+        for idx, s in enumerate(slots, start=1):
+            if idx > 9:
+                break
+            slot_mapping[str(idx)] = s["slot_time_gu"]
+            prompt_parts.append(f"{s['slot_time_gu']} માટે {idx} દબાવો. ")
+
+        prompt_parts.append("મુખ્ય મેનુ માટે 9 દબાવો.")
+        prompt_text = "".join(prompt_parts)
+        prompt_path = self._sound(self.tts.synthesize_gujarati(prompt_text))
 
         attempts = 0
         while attempts < 3 and not self.channel.is_hungup:
-            digit = await self.channel.get_data(prompt_path, timeout_ms=7000, max_digits=1)
-            if digit == "1":
+            digit = await self.channel.get_data(prompt_path, timeout_ms=8000, max_digits=1)
+            if digit in slot_mapping:
+                self.session.selected_slot_time_gu = slot_mapping[digit]
                 self.session.state = "MOBILE_CAPTURE"
                 return
-            elif digit == "2":
+            elif digit in ("9", "2"):
                 self.session.state = "WELCOME"
                 return
             elif digit in ("#", "", None):
@@ -258,7 +269,8 @@ class IVREngine:
                 if attempts < 3:
                     await self.channel.stream_file(self._sound("gu/invalid_option"))
 
-        # Default fallback to booking flow rather than hanging up
+        # Default: pick first available slot if user stayed on line
+        self.session.selected_slot_time_gu = slots[0]["slot_time_gu"]
         self.session.state = "MOBILE_CAPTURE"
 
     # -------------------------------------------------------------------------
@@ -335,7 +347,7 @@ class IVREngine:
         Prompts: "કૃપા કરીને તમારું નામ જણાવો"
         Records voice stream -> Sarvam STT gu-IN -> Recognized Gujarati Name
         Speaks back: "તમારું નામ ______ છે. સાચું હોય તો 1 દબાવો. ફરીથી કહેવા માટે 2 દબાવો."
-        1 -> Name Confirmed
+        1 -> Name Confirmed -> FINAL_CONFIRMATION
         2 -> Name Capture Retry
         """
         attempts = 0
@@ -389,24 +401,15 @@ class IVREngine:
         self.session.state = "FINAL_CONFIRMATION"
 
     # -------------------------------------------------------------------------
-    # 5. FINAL CONFIRMATION
+    # 6. STREAMLINED FINAL CONFIRMATION
     # -------------------------------------------------------------------------
     async def _state_final_confirmation(self):
         """
-        "તમારું નામ ______ છે.
-         તમારો મોબાઇલ નંબર ______ છે.
-         ડોક્ટર ______ માટે આજનો સમય ______ છે.
-         બુક કરવા માટે 1 દબાવો.
-         મુખ્ય મેનુ માટે 2 દબાવો."
+        Directly asks: "એપોઇન્ટમેન્ટ બુક કરવા માટે 1 દબાવો. મુખ્ય મેનુ માટે 2 દબાવો."
         1 -> Booking (DB Transaction)
         2 -> Main Menu
         """
-        prompt_text = (
-            f"તમારું નામ {self.session.patient_name_gu} છે. "
-            f"તમારો મોબાઇલ નંબર {' '.join(self.session.mobile_number)} છે. "
-            f"{self.session.selected_doctor_name_gu} માટે આજનો સમય {self.session.selected_slot_time_gu} છે. "
-            f"એપોઇન્ટમેન્ટ બુક કરવા માટે 1 દબાવો. મુખ્ય મેનુ માટે 2 દબાવો."
-        )
+        prompt_text = "એપોઇન્ટમેન્ટ બુક કરવા માટે 1 દબાવો. મુખ્ય મેનુ માટે 2 દબાવો."
         audio_path = self._sound(self.tts.synthesize_gujarati(prompt_text))
 
         attempts = 0
@@ -432,26 +435,27 @@ class IVREngine:
         self.session.state = "BOOKING_TRANSACTION"
 
     # -------------------------------------------------------------------------
-    # 6. DB TRANSACTION & BOOKING SUCCESS
+    # 7. DB TRANSACTION & BOOKING SUCCESS ANNOUNCEMENT
     # -------------------------------------------------------------------------
     async def _state_booking_transaction(self):
         """
         Executes atomic database transaction:
-        Lock doctor/date, verify availability, upsert patient, create appointment, generate ID.
-        Then announces Booking Success:
+        Locks doctor/slot/date with BEGIN IMMEDIATE, checks max 8 slots per hour, creates appointment.
+        Then announces Booking Success details:
         "તમારી એપોઇન્ટમેન્ટ સફળતાપૂર્વક બુક થઈ ગઈ છે.
          તમારું નામ ______ છે.
          તમારો મોબાઇલ નંબર ______ છે.
          તમારો એપોઇન્ટમેન્ટ નંબર ______ છે.
-         સમય ______ છે.
-         ત્રિણય ઓર્થોપેડિક હોસ્પિટલ તરફથી આભાર."
+         તમારો સમય ______ છે.
+         ______ માટે ત્રિનય ઓર્થોપેડિક હોસ્પિટલ તરફથી આભાર."
         -> HANGUP
         """
         result = self.db.book_appointment(
             doctor_id=self.session.selected_doctor_id,
             mobile_number=self.session.mobile_number,
             patient_name_gu=self.session.patient_name_gu,
-            target_date=self.session.selected_date
+            target_date=self.session.selected_date,
+            slot_time_gu=self.session.selected_slot_time_gu
         )
 
         if not result.get("success", False):
@@ -465,6 +469,8 @@ class IVREngine:
         appt_id = result.get("appointment_id")
         self.session.appointment_code = appt_code
         self.session.appointment_id = appt_id
+        if result.get("slot_time_gu"):
+            self.session.selected_slot_time_gu = result.get("slot_time_gu")
 
         # Use the database row number as the spoken appointment number
         spoken_appt_num = str(appt_id) if appt_id is not None else (appt_code.replace("APT-", "") if "APT-" in appt_code else appt_code)
@@ -474,8 +480,8 @@ class IVREngine:
             f"તમારું નામ {self.session.patient_name_gu} છે. "
             f"તમારો મોબાઇલ નંબર {' '.join(self.session.mobile_number)} છે. "
             f"તમારો એપોઇન્ટમેન્ટ નંબર {spoken_appt_num} છે. "
-            f"સમય {self.session.selected_slot_time_gu} છે. "
-            f"ત્રિણય ઓર્થોપેડિક હોસ્પિટલ તરફથી આભાર."
+            f"તમારો સમય {self.session.selected_slot_time_gu} છે. "
+            f"{self.session.selected_doctor_name_gu} માટે ત્રિનય ઓર્થોપેડિક હોસ્પિટલ તરફથી આભાર."
         )
         success_audio = self._sound(self.tts.synthesize_gujarati(success_text))
 
