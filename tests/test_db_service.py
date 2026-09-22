@@ -31,15 +31,31 @@ def test_doctors_and_schedules_seeded(test_db):
     assert "જયદીપ" in doc2["name_gu"]
 
 def test_check_availability(test_db):
-    avail1 = test_db.check_availability(1)
+    avail1 = test_db.check_availability(1, current_time="08:00")
     assert avail1["available"] is True
     assert len(avail1["slots"]) == 3
     assert "સાંજે" in avail1["slots"][0]["slot_time_gu"]
 
-    avail2 = test_db.check_availability(2)
+    avail2 = test_db.check_availability(2, current_time="08:00")
     assert avail2["available"] is True
     assert len(avail2["slots"]) == 4
     assert "સવારે" in avail2["slots"][0]["slot_time_gu"]
+
+def test_past_slots_filtered(test_db):
+    # At 11:30 AM, doctor 2's 10:00-11:00 slot is past, so only 3 remaining slots should be available (11-12, 12-1, 1-2)
+    avail_1130 = test_db.check_availability(2, current_time="11:30")
+    assert avail_1130["available"] is True
+    assert len(avail_1130["slots"]) == 3
+    assert avail_1130["slots"][0]["slot_time_gu"] == "સવારે 11:00 થી 12:00"
+
+    # At 15:00 (3:00 PM), all doctor 2 slots (ending at 14:00) have passed
+    avail_1500 = test_db.check_availability(2, current_time="15:00")
+    assert avail_1500["available"] is False
+
+    # Attempting to book a past slot at 15:00 should fail with SLOT_EXPIRED
+    res = test_db.book_appointment(2, "9825000000", "ટેસ્ટ", slot_time_gu="સવારે 10:00 થી 11:00", current_time="15:00")
+    assert res["success"] is False
+    assert res["error"] == "SLOT_EXPIRED"
 
 def test_booking_transaction_success(test_db):
     mobile = "9825012345"
@@ -81,19 +97,19 @@ def test_slots_exhaustion_concurrency(test_db):
     test_db.set_doctor_slots(doctor_id=2, max_slots=2)
 
     # Book slot 1
-    r1 = test_db.book_appointment(2, "9800000001", "દર્દી ૧")
+    r1 = test_db.book_appointment(2, "9800000001", "દર્દી ૧", current_time="08:00")
     assert r1["success"] is True
 
     # Book slot 2
-    r2 = test_db.book_appointment(2, "9800000002", "દર્દી ૨")
+    r2 = test_db.book_appointment(2, "9800000002", "દર્દી ૨", current_time="08:00")
     assert r2["success"] is True
 
     # First hourly slot (10:00 to 11:00) is now full, so check_availability returns 3 remaining slots
-    avail = test_db.check_availability(2)
+    avail = test_db.check_availability(2, current_time="08:00")
     assert len(avail["slots"]) == 3
     assert all("10:00" not in s["slot_time_gu"] for s in avail["slots"])
 
     # Attempt to book third appointment in same slot should fail
-    r3 = test_db.book_appointment(2, "9800000003", "દર્દી ૩", slot_time_gu="સવારે 10:00 થી 11:00")
+    r3 = test_db.book_appointment(2, "9800000003", "દર્દી ૩", slot_time_gu="સવારે 10:00 થી 11:00", current_time="08:00")
     assert r3["success"] is False
     assert r3["error"] == "SLOTS_FULL"

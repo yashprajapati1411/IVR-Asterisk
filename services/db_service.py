@@ -127,16 +127,27 @@ class DatabaseService:
         conn.close()
         return dict(row) if row else None
 
-    def check_availability(self, doctor_id: int, target_date: Optional[str] = None) -> Dict[str, Any]:
+    def check_availability(
+        self,
+        doctor_id: int,
+        target_date: Optional[str] = None,
+        current_time: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Checks today's (or given date's) hourly slot availability for a doctor.
+        Filters out past hourly slots for today.
         Returns dict with available=True/False and list of available hourly slots.
         """
+        today_str = datetime.date.today().isoformat()
         if not target_date:
-            target_date = datetime.date.today().isoformat()
+            target_date = today_str
         
         target_dt = datetime.date.fromisoformat(target_date)
         day_of_week = target_dt.weekday() # 0=Monday, 6=Sunday
+
+        filter_time = None
+        if target_date == today_str:
+            filter_time = current_time if current_time is not None else datetime.datetime.now().strftime("%H:%M")
 
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -161,6 +172,11 @@ class DatabaseService:
 
         available_slots = []
         for s in schedules:
+            # Filter out past slots for today (where end_time <= filter_time)
+            if filter_time and target_date == today_str:
+                if s["end_time"] <= filter_time:
+                    continue
+
             slot_time_gu = s["slot_time_gu"]
             max_slots = s["max_slots"]
 
@@ -208,21 +224,27 @@ class DatabaseService:
         mobile_number: str,
         patient_name_gu: str,
         target_date: Optional[str] = None,
-        slot_time_gu: Optional[str] = None
+        slot_time_gu: Optional[str] = None,
+        current_time: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Executes atomic database transaction:
         1. Locks doctor & date with BEGIN IMMEDIATE.
-        2. Verifies hourly slot availability.
+        2. Verifies hourly slot availability and that slot end_time has not passed.
         3. Creates/upserts patient.
         4. Creates appointment.
         5. Returns appointment code and details.
         """
+        today_str = datetime.date.today().isoformat()
         if not target_date:
-            target_date = datetime.date.today().isoformat()
+            target_date = today_str
             
         target_dt = datetime.date.fromisoformat(target_date)
         day_of_week = target_dt.weekday()
+
+        filter_time = None
+        if target_date == today_str:
+            filter_time = current_time if current_time is not None else datetime.datetime.now().strftime("%H:%M")
 
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -252,12 +274,22 @@ class DatabaseService:
                     WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
                     ORDER BY start_time ASC
                 """, (doctor_id, day_of_week))
-                schedule = cursor.fetchone()
+                all_scheds = cursor.fetchall()
+                schedule = None
+                for sch in all_scheds:
+                    if not (filter_time and target_date == today_str and sch["end_time"] <= filter_time):
+                        schedule = sch
+                        break
 
             if not schedule:
                 cursor.execute("ROLLBACK")
                 conn.close()
                 return {"success": False, "error": "NO_SCHEDULE"}
+
+            if filter_time and target_date == today_str and schedule["end_time"] <= filter_time:
+                cursor.execute("ROLLBACK")
+                conn.close()
+                return {"success": False, "error": "SLOT_EXPIRED"}
 
             target_slot_time_gu = schedule["slot_time_gu"]
             max_slots = schedule["max_slots"]
