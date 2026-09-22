@@ -52,6 +52,10 @@ def test_past_slots_filtered(test_db):
     avail_1500 = test_db.check_availability(2, current_time="15:00")
     assert avail_1500["available"] is False
 
+    # At 20:30 (8:30 PM), all doctor 1 slots (ending at 20:00) have passed
+    avail_2030_doc1 = test_db.check_availability(1, current_time="20:30")
+    assert avail_2030_doc1["available"] is False
+
     # Attempting to book a past slot at 15:00 should fail with SLOT_EXPIRED
     res = test_db.book_appointment(2, "9825000000", "ટેસ્ટ", slot_time_gu="સવારે 10:00 થી 11:00", current_time="15:00")
     assert res["success"] is False

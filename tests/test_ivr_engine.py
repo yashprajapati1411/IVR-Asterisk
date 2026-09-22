@@ -183,6 +183,25 @@ async def test_no_slots_and_main_menu(setup_env):
     assert any("other_info" in cmd for cmd in channel.files_streamed)
 
 @pytest.mark.asyncio
+async def test_no_slots_dr_jaydeep_and_main_menu(setup_env):
+    db, stt, tts = setup_env
+    # Set doctor 2 slots to 0
+    db.set_doctor_slots(doctor_id=2, max_slots=0)
+
+    # Inputs:
+    # 1: Welcome -> 2 (Dr. Jaydeep)
+    # 2: No slots -> 2 (Return to Main Menu)
+    # 3: At Welcome -> 3 (Other info -> Hangup)
+    inputs = ["2", "2", "3"]
+    channel = MockAGIChannel(inputs=inputs)
+    engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
+
+    await engine.run()
+
+    assert any("no_slots_today" in cmd for cmd in channel.files_streamed)
+    assert any("other_info" in cmd for cmd in channel.files_streamed)
+
+@pytest.mark.asyncio
 async def test_invalid_mobile_retry(setup_env):
     db, stt, tts = setup_env
     stt.set_mock_name("સુરેશભાઈ")
