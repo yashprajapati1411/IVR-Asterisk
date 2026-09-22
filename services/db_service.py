@@ -76,9 +76,12 @@ class DatabaseService:
         conn = self.get_connection()
         cursor = conn.cursor()
         
-        if reset:
+        # Check if old legacy block schedules exist (e.g. 5:00 PM to 8:00 PM)
+        cursor.execute("SELECT COUNT(*) as cnt FROM doctor_schedules WHERE slot_time_gu LIKE '%5:00 થી 8:00%' OR slot_time_gu LIKE '%10:00 થી બપોરે 1:00%'")
+        has_legacy = cursor.fetchone()["cnt"] > 0
+
+        if reset or has_legacy:
             cursor.execute("DELETE FROM appointments")
-            cursor.execute("DELETE FROM patients")
             cursor.execute("DELETE FROM doctor_schedules")
             cursor.execute("DELETE FROM doctors")
 
