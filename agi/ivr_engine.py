@@ -478,7 +478,8 @@ class IVREngine:
             self.session.selected_slot_time_gu = result.get("slot_time_gu")
 
         # Use the database row number as the spoken appointment number
-        spoken_appt_num = str(appt_id) if appt_id is not None else (appt_code.replace("APT-", "") if "APT-" in appt_code else appt_code)
+        token_num = result.get("token_number") or result.get("appointment_number")
+        spoken_appt_num = str(token_num) if token_num is not None else (appt_code.replace("APT-", "") if "APT-" in appt_code else appt_code)
 
         success_text = (
             f"તમારી એપોઇન્ટમેન્ટ સફળતાપૂર્વક બુક થઈ ગઈ છે. "

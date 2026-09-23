@@ -59,7 +59,7 @@ class DatabaseService:
 
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            appointment_code TEXT UNIQUE NOT NULL,
+            appointment_code TEXT NOT NULL,
             token_number INTEGER DEFAULT 1,
             doctor_id INTEGER NOT NULL,
             patient_id INTEGER NOT NULL,
@@ -86,6 +86,81 @@ class DatabaseService:
         if "source" not in app_cols:
             cursor.execute("ALTER TABLE appointments ADD COLUMN source TEXT DEFAULT 'IVR'")
 
+        # Remove implicit unique constraint on appointment_code if table was created with UNIQUE
+        cursor.execute("PRAGMA index_list(appointments)")
+        indices = cursor.fetchall()
+        has_unique_code = False
+        for idx in indices:
+            cursor.execute(f"PRAGMA index_info('{idx['name']}')")
+            idx_cols = [c["name"] for c in cursor.fetchall()]
+            if idx_cols == ["appointment_code"] and idx["unique"]:
+                has_unique_code = True
+                break
+
+        if has_unique_code:
+            cursor.executescript("""
+            CREATE TABLE appointments_temp (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                appointment_code TEXT NOT NULL,
+                token_number INTEGER DEFAULT 1,
+                doctor_id INTEGER NOT NULL,
+                patient_id INTEGER NOT NULL,
+                appointment_date TEXT NOT NULL,
+                slot_time TEXT NOT NULL,
+                source TEXT DEFAULT 'IVR',
+                status TEXT DEFAULT 'CONFIRMED',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(doctor_id) REFERENCES doctors(id),
+                FOREIGN KEY(patient_id) REFERENCES patients(id)
+            );
+            INSERT INTO appointments_temp (id, appointment_code, token_number, doctor_id, patient_id, appointment_date, slot_time, source, status, created_at)
+            SELECT id, appointment_code, token_number, doctor_id, patient_id, appointment_date, slot_time, source, status, created_at FROM appointments;
+            DROP TABLE appointments;
+            ALTER TABLE appointments_temp RENAME TO appointments;
+            """)
+
+        conn.close()
+        self.recalculate_and_sync_all_tokens()
+
+    def recalculate_and_sync_all_tokens(self):
+        """
+        Recalculates token_number and appointment_code for all appointments 
+        grouped by (appointment_date, doctor_id) and slot sequence.
+        Fixes legacy APT-100X codes and aligns all tokens.
+        """
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Get all distinct (appointment_date, doctor_id) pairs
+        cursor.execute("SELECT DISTINCT appointment_date, doctor_id FROM appointments")
+        pairs = cursor.fetchall()
+
+        for p in pairs:
+            date_str = p["appointment_date"]
+            doctor_id = p["doctor_id"]
+            schedules = self.get_schedules_for_date(doctor_id, date_str)
+
+            for sch in schedules:
+                slot_time_gu = sch["slot_time_gu"]
+                start_token = sch["start_token"]
+                
+                cursor.execute("""
+                    SELECT id FROM appointments 
+                    WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
+                    ORDER BY id ASC
+                """, (doctor_id, date_str, slot_time_gu))
+                appts = cursor.fetchall()
+
+                for idx, app in enumerate(appts):
+                    token_num = start_token + idx
+                    code = f"APT-{token_num}"
+                    cursor.execute("""
+                        UPDATE appointments 
+                        SET token_number = ?, appointment_code = ? 
+                        WHERE id = ?
+                    """, (token_num, code, app["id"]))
+
+        conn.commit()
         conn.close()
 
     def seed_initial_data(self, reset: bool = False):
