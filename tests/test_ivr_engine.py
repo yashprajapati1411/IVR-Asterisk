@@ -117,6 +117,13 @@ async def test_path_dr_jaydeep(setup_env):
     # Final Confirm -> 1
     inputs = ["2", "1", "9898012345", "1", "1", "1"]
     channel = MockAGIChannel(inputs=inputs)
+    
+    # Patch check_availability & book_appointment to simulate morning call at 08:00
+    orig_check = db.check_availability
+    orig_book = db.book_appointment
+    db.check_availability = lambda doctor_id, target_date=None: orig_check(doctor_id, target_date, current_time="08:00")
+    db.book_appointment = lambda doctor_id, mobile_number, patient_name_gu, target_date=None, slot_time_gu=None, source="IVR": orig_book(doctor_id, mobile_number, patient_name_gu, target_date, slot_time_gu, current_time="08:00", source=source)
+    
     engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
 
     await engine.run()

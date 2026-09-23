@@ -1,0 +1,67 @@
+/* Trinay Orthopedic Hospital Receptionist Dashboard Styles (Minimalist Light Theme) */
+:root {
+  --primary: #0284c7;
+  --primary-hover: #0369a1;
+  --bg-light: #f8fafc;
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg-light);
+  color: var(--text-main);
+}
+
+/* Custom badges */
+.badge-ivr {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.badge-manual {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-confirmed {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.badge-completed {
+  background-color: #f1f5f9;
+  color: #475569;
+}
+
+.badge-cancelled {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+/* Token Pill styling */
+.token-pill {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background-color: #0284c7;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+/* Table styling */
+.dashboard-table th {
+  background-color: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Modal overlay */
+.modal-backdrop {
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+}

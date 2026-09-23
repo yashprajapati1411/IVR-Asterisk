@@ -39,6 +39,7 @@ class DatabaseService:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             doctor_id INTEGER NOT NULL,
             day_of_week INTEGER NOT NULL, -- 0=Mon, 6=Sun
+            schedule_date TEXT DEFAULT 'DEFAULT', -- 'YYYY-MM-DD' or 'DEFAULT'
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
             slot_time_gu TEXT NOT NULL,
@@ -59,16 +60,32 @@ class DatabaseService:
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             appointment_code TEXT UNIQUE NOT NULL,
+            token_number INTEGER DEFAULT 1,
             doctor_id INTEGER NOT NULL,
             patient_id INTEGER NOT NULL,
             appointment_date TEXT NOT NULL, -- YYYY-MM-DD
             slot_time TEXT NOT NULL,
-            status TEXT DEFAULT 'CONFIRMED', -- 'CONFIRMED', 'CANCELLED'
+            source TEXT DEFAULT 'IVR', -- 'IVR', 'MANUAL'
+            status TEXT DEFAULT 'CONFIRMED', -- 'CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'CANCELLED'
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(doctor_id) REFERENCES doctors(id),
             FOREIGN KEY(patient_id) REFERENCES patients(id)
         );
         """)
+
+        # Safely migrate existing tables if columns are missing
+        cursor.execute("PRAGMA table_info(doctor_schedules)")
+        cols = [r["name"] for r in cursor.fetchall()]
+        if "schedule_date" not in cols:
+            cursor.execute("ALTER TABLE doctor_schedules ADD COLUMN schedule_date TEXT DEFAULT 'DEFAULT'")
+
+        cursor.execute("PRAGMA table_info(appointments)")
+        app_cols = [r["name"] for r in cursor.fetchall()]
+        if "token_number" not in app_cols:
+            cursor.execute("ALTER TABLE appointments ADD COLUMN token_number INTEGER DEFAULT 1")
+        if "source" not in app_cols:
+            cursor.execute("ALTER TABLE appointments ADD COLUMN source TEXT DEFAULT 'IVR'")
+
         conn.close()
 
     def seed_initial_data(self, reset: bool = False):
@@ -152,13 +169,17 @@ class DatabaseService:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        # Get schedules for this doctor and day of week
+        # Query date-specific schedules first, fallback to day_of_week default schedules
         cursor.execute("""
             SELECT * FROM doctor_schedules 
-            WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
+            WHERE doctor_id = ? AND (schedule_date = ? OR ((schedule_date = 'DEFAULT' OR schedule_date IS NULL) AND day_of_week = ?)) AND is_active = 1
             ORDER BY start_time ASC
-        """, (doctor_id, day_of_week))
-        schedules = cursor.fetchall()
+        """, (doctor_id, target_date, day_of_week))
+        all_found = cursor.fetchall()
+        
+        # Prefer specific date schedules if present
+        date_specific = [s for s in all_found if s["schedule_date"] == target_date]
+        schedules = date_specific if date_specific else [s for s in all_found if (s["schedule_date"] == "DEFAULT" or s["schedule_date"] is None)]
 
         if not schedules:
             conn.close()
@@ -182,13 +203,14 @@ class DatabaseService:
 
             cursor.execute("""
                 SELECT COUNT(*) as booked FROM appointments 
-                WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status = 'CONFIRMED'
+                WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
             """, (doctor_id, target_date, slot_time_gu))
             booked_count = cursor.fetchone()["booked"]
             slots_left = max_slots - booked_count
 
             if slots_left > 0:
                 available_slots.append({
+                    "id": s["id"],
                     "slot_time_gu": slot_time_gu,
                     "slot_time_en": s["slot_time_en"],
                     "start_time": s["start_time"],
@@ -225,15 +247,17 @@ class DatabaseService:
         patient_name_gu: str,
         target_date: Optional[str] = None,
         slot_time_gu: Optional[str] = None,
-        current_time: Optional[str] = None
+        current_time: Optional[str] = None,
+        source: str = "IVR"
     ) -> Dict[str, Any]:
         """
         Executes atomic database transaction:
         1. Locks doctor & date with BEGIN IMMEDIATE.
         2. Verifies hourly slot availability and that slot end_time has not passed.
-        3. Creates/upserts patient.
-        4. Creates appointment.
-        5. Returns appointment code and details.
+        3. Calculates slot-range based token number (e.g. 1-10, 11-20).
+        4. Creates/upserts patient.
+        5. Creates appointment.
+        6. Returns appointment code (APT-X) and token number.
         """
         today_str = datetime.date.today().isoformat()
         if not target_date:
@@ -243,7 +267,7 @@ class DatabaseService:
         day_of_week = target_dt.weekday()
 
         filter_time = None
-        if target_date == today_str:
+        if target_date == today_str and source == "IVR":
             filter_time = current_time if current_time is not None else datetime.datetime.now().strftime("%H:%M")
 
         conn = self.get_connection()
@@ -261,22 +285,31 @@ class DatabaseService:
                 conn.close()
                 return {"success": False, "error": "DOCTOR_NOT_FOUND"}
 
-            # Verify schedule and capacity for selected slot
+            # Get active schedules for date
+            cursor.execute("""
+                SELECT * FROM doctor_schedules 
+                WHERE doctor_id = ? AND (schedule_date = ? OR ((schedule_date = 'DEFAULT' OR schedule_date IS NULL) AND day_of_week = ?)) AND is_active = 1
+                ORDER BY start_time ASC
+            """, (doctor_id, target_date, day_of_week))
+            all_found = cursor.fetchall()
+
+            date_specific = [s for s in all_found if s["schedule_date"] == target_date]
+            schedules = date_specific if date_specific else [s for s in all_found if (s["schedule_date"] == "DEFAULT" or s["schedule_date"] is None)]
+
+            if not schedules:
+                cursor.execute("ROLLBACK")
+                conn.close()
+                return {"success": False, "error": "NO_SCHEDULE"}
+
+            # Find target schedule
+            schedule = None
             if slot_time_gu:
-                cursor.execute("""
-                    SELECT * FROM doctor_schedules 
-                    WHERE doctor_id = ? AND day_of_week = ? AND slot_time_gu = ? AND is_active = 1
-                """, (doctor_id, day_of_week, slot_time_gu))
-                schedule = cursor.fetchone()
+                for sch in schedules:
+                    if sch["slot_time_gu"] == slot_time_gu:
+                        schedule = sch
+                        break
             else:
-                cursor.execute("""
-                    SELECT * FROM doctor_schedules 
-                    WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
-                    ORDER BY start_time ASC
-                """, (doctor_id, day_of_week))
-                all_scheds = cursor.fetchall()
-                schedule = None
-                for sch in all_scheds:
+                for sch in schedules:
                     if not (filter_time and target_date == today_str and sch["end_time"] <= filter_time):
                         schedule = sch
                         break
@@ -294,16 +327,27 @@ class DatabaseService:
             target_slot_time_gu = schedule["slot_time_gu"]
             max_slots = schedule["max_slots"]
 
+            # Count booked in target slot
             cursor.execute("""
                 SELECT COUNT(*) as booked FROM appointments 
-                WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status = 'CONFIRMED'
+                WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
             """, (doctor_id, target_date, target_slot_time_gu))
             booked_count = cursor.fetchone()["booked"]
 
-            if booked_count >= max_slots:
+            if booked_count >= max_slots and source == "IVR":
                 cursor.execute("ROLLBACK")
                 conn.close()
                 return {"success": False, "error": "SLOTS_FULL"}
+
+            # Calculate slot-range token number (e.g., Slot 1: 1-10, Slot 2: 11-20)
+            start_token = 1
+            for sch in schedules:
+                if sch["slot_time_gu"] == target_slot_time_gu:
+                    break
+                start_token += sch["max_slots"]
+
+            token_number = start_token + booked_count
+            appointment_code = f"APT-{token_number}"
 
             # Upsert patient
             cursor.execute("SELECT id FROM patients WHERE mobile_number = ?", (mobile_number,))
@@ -322,17 +366,12 @@ class DatabaseService:
                 """, (mobile_number, patient_name_gu))
                 patient_id = cursor.lastrowid
 
-            # Generate unique appointment reference code
-            cursor.execute("SELECT COUNT(*) as total_appts FROM appointments")
-            total = cursor.fetchone()["total_appts"]
-            appointment_code = f"APT-{1000 + total + 1}"
-
             # Insert appointment
             cursor.execute("""
                 INSERT INTO appointments 
-                (appointment_code, doctor_id, patient_id, appointment_date, slot_time, status)
-                VALUES (?, ?, ?, ?, ?, 'CONFIRMED')
-            """, (appointment_code, doctor_id, patient_id, target_date, target_slot_time_gu))
+                (appointment_code, token_number, doctor_id, patient_id, appointment_date, slot_time, source, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'CONFIRMED')
+            """, (appointment_code, token_number, doctor_id, patient_id, target_date, target_slot_time_gu, source))
             appointment_id = cursor.lastrowid
 
             cursor.execute("COMMIT")
@@ -341,7 +380,8 @@ class DatabaseService:
             return {
                 "success": True,
                 "appointment_id": appointment_id,
-                "appointment_number": appointment_id,
+                "token_number": token_number,
+                "appointment_number": token_number,
                 "appointment_code": appointment_code,
                 "doctor_id": doctor_id,
                 "doctor_name_gu": doctor["name_gu"],
@@ -350,13 +390,149 @@ class DatabaseService:
                 "mobile_number": mobile_number,
                 "appointment_date": target_date,
                 "slot_time_gu": target_slot_time_gu,
-                "slot_time_en": schedule["slot_time_en"]
+                "slot_time_en": schedule["slot_time_en"],
+                "source": source
             }
 
         except Exception as e:
             cursor.execute("ROLLBACK")
             conn.close()
             return {"success": False, "error": str(e)}
+
+    def get_appointments_list(
+        self,
+        date_str: Optional[str] = None,
+        doctor_id: Optional[int] = None,
+        search_query: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Returns appointments with patient & doctor details for dashboard."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        sql = """
+            SELECT 
+                a.id, a.appointment_code, a.token_number, a.appointment_date, a.slot_time,
+                a.source, a.status, a.created_at,
+                p.mobile_number, p.name_gu as patient_name_gu,
+                d.name_en as doctor_name_en, d.name_gu as doctor_name_gu
+            FROM appointments a
+            JOIN patients p ON a.patient_id = p.id
+            JOIN doctors d ON a.doctor_id = d.id
+            WHERE 1=1
+        """
+        params = []
+        if date_str:
+            sql += " AND a.appointment_date = ?"
+            params.append(date_str)
+        if doctor_id:
+            sql += " AND a.doctor_id = ?"
+            params.append(doctor_id)
+        if search_query:
+            sql += " AND (p.name_gu LIKE ? OR p.mobile_number LIKE ? OR a.appointment_code LIKE ? OR CAST(a.token_number AS TEXT) LIKE ?)"
+            q = f"%{search_query}%"
+            params.extend([q, q, q, q])
+
+        sql += " ORDER BY a.token_number ASC, a.created_at ASC"
+
+        cursor.execute(sql, params)
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def update_appointment_status(self, appointment_id: int, status: str) -> bool:
+        """Updates appointment status: CONFIRMED, CHECKED_IN, COMPLETED, CANCELLED."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE appointments SET status = ? WHERE id = ?", (status, appointment_id))
+        updated = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return updated
+
+    def get_schedules_for_date(self, doctor_id: int, target_date: str) -> List[Dict[str, Any]]:
+        """Returns doctor schedules for target date with booked counts and token ranges."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        target_dt = datetime.date.fromisoformat(target_date)
+        day_of_week = target_dt.weekday()
+
+        cursor.execute("""
+            SELECT * FROM doctor_schedules 
+            WHERE doctor_id = ? AND (schedule_date = ? OR ((schedule_date = 'DEFAULT' OR schedule_date IS NULL) AND day_of_week = ?)) AND is_active = 1
+            ORDER BY start_time ASC
+        """, (doctor_id, target_date, day_of_week))
+        all_found = cursor.fetchall()
+        date_specific = [s for s in all_found if s["schedule_date"] == target_date]
+        schedules = date_specific if date_specific else [s for s in all_found if (s["schedule_date"] == "DEFAULT" or s["schedule_date"] is None)]
+
+        result = []
+        start_token = 1
+        for s in schedules:
+            slot_time_gu = s["slot_time_gu"]
+            max_slots = s["max_slots"]
+            cursor.execute("""
+                SELECT COUNT(*) as booked FROM appointments 
+                WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
+            """, (doctor_id, target_date, slot_time_gu))
+            booked_count = cursor.fetchone()["booked"]
+
+            result.append({
+                "id": s["id"],
+                "doctor_id": s["doctor_id"],
+                "schedule_date": s["schedule_date"],
+                "start_time": s["start_time"],
+                "end_time": s["end_time"],
+                "slot_time_gu": slot_time_gu,
+                "slot_time_en": s["slot_time_en"],
+                "max_slots": max_slots,
+                "booked_count": booked_count,
+                "slots_left": max(0, max_slots - booked_count),
+                "start_token": start_token,
+                "end_token": start_token + max_slots - 1,
+                "is_active": s["is_active"]
+            })
+            start_token += max_slots
+
+        conn.close()
+        return result
+
+    def save_or_update_slot(
+        self,
+        doctor_id: int,
+        schedule_date: str,
+        start_time: str,
+        end_time: str,
+        slot_time_gu: str,
+        slot_time_en: str,
+        max_slots: int = 8,
+        is_active: int = 1,
+        slot_id: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Creates or updates a schedule slot for a specific date or default template."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        target_dt = datetime.date.fromisoformat(schedule_date) if schedule_date != "DEFAULT" else datetime.date.today()
+        day_of_week = target_dt.weekday()
+
+        if slot_id:
+            cursor.execute("""
+                UPDATE doctor_schedules 
+                SET start_time=?, end_time=?, slot_time_gu=?, slot_time_en=?, max_slots=?, is_active=?
+                WHERE id=?
+            """, (start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, slot_id))
+            res_id = slot_id
+        else:
+            cursor.execute("""
+                INSERT INTO doctor_schedules 
+                (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active))
+            res_id = cursor.lastrowid
+
+        conn.commit()
+        conn.close()
+        return {"success": True, "slot_id": res_id}
 
     def set_doctor_slots(self, doctor_id: int, max_slots: int):
         """Helper for testing: update doctor's max slots."""

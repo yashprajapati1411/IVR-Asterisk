@@ -170,6 +170,11 @@ class IVREngine:
                 self.session.state = "OTHER_INFO"
                 return
 
+            elif digit == "0":
+                await self.channel.stream_file(self._sound("gu/connecting_receptionist"))
+                self.session.state = "TRANSFER_RECEPTIONIST"
+                return
+
             else:
                 attempts += 1
                 if digit is not None and attempts < max_attempts:
