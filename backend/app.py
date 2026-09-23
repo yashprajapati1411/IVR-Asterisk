@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 # Insert project root to sys.path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
 sys.path.insert(0, PROJECT_ROOT)
 
 from backend.routes.appointments import router as appointments_router
@@ -32,11 +33,6 @@ app.include_router(appointments_router)
 app.include_router(schedules_router)
 app.include_router(doctors_router)
 
-# Mount frontend static directory
-FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
-if os.path.exists(FRONTEND_DIR):
-    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-
 @app.get("/")
 def read_root():
     """Serves the Receptionist Dashboard UI."""
@@ -48,6 +44,16 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "app": "Trinay Hospital Dashboard"}
+
+# Mount frontend static directories
+if os.path.exists(FRONTEND_DIR):
+    css_dir = os.path.join(FRONTEND_DIR, "css")
+    js_dir = os.path.join(FRONTEND_DIR, "js")
+    if os.path.exists(css_dir):
+        app.mount("/css", StaticFiles(directory=css_dir), name="css")
+    if os.path.exists(js_dir):
+        app.mount("/js", StaticFiles(directory=js_dir), name="js")
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 if __name__ == "__main__":
     import uvicorn
