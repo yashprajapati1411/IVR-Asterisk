@@ -10,6 +10,15 @@ document.addEventListener('alpine:init', () => {
     selectedDoctorId: '',
     selectedDate: new Date().toISOString().split('T')[0],
     searchQuery: '',
+
+    get isTodaySelected() {
+      return this.selectedDate === new Date().toISOString().split('T')[0];
+    },
+
+    setTodayDate() {
+      this.selectedDate = new Date().toISOString().split('T')[0];
+      this.fetchAppointments();
+    },
     
     // Appointments Data
     appointments: [],

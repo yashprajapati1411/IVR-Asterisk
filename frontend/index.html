@@ -30,12 +30,26 @@
         </div>
       </div>
 
-      <div class="flex items-center space-x-4">
-        <div class="hidden sm:flex items-center text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
-          <i class="fa-regular fa-clock mr-1.5 text-sky-600"></i>
-          <span x-text="new Date().toLocaleDateString('gu-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })"></span>
+      <div class="flex items-center space-x-3">
+        <!-- Date Selector Widget in Header -->
+        <div class="flex items-center space-x-2 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg">
+          <i class="fa-regular fa-calendar-days text-sky-600 text-sm"></i>
+          <span class="text-xs font-semibold text-slate-500 hidden md:inline">તારીખ:</span>
+          <input 
+            type="date" 
+            x-model="selectedDate" 
+            @change="fetchAppointments()" 
+            class="bg-transparent text-xs text-slate-800 font-bold focus:outline-none cursor-pointer">
+          <button 
+            x-show="!isTodaySelected" 
+            @click="setTodayDate()" 
+            class="text-xs bg-sky-600 hover:bg-sky-700 text-white font-medium px-2 py-0.5 rounded shadow-sm transition-all"
+            title="આજની તારીખ પર જાઓ">
+            આજે (Today)
+          </button>
         </div>
-        <div class="flex items-center space-x-2 border-l border-slate-200 pl-4">
+
+        <div class="flex items-center space-x-2 border-l border-slate-200 pl-3">
           <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-sky-700 font-semibold text-xs">
             <i class="fa-solid fa-user-gear"></i>
           </span>
@@ -138,6 +152,16 @@
               x-model="selectedDate" 
               @change="fetchAppointments()"
               class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
+            <button 
+              x-show="!isTodaySelected" 
+              @click="setTodayDate()" 
+              class="text-xs bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold px-2 py-1 rounded transition-all flex items-center space-x-1">
+              <i class="fa-solid fa-rotate-left text-xs"></i>
+              <span>આજે (Today)</span>
+            </button>
+            <span x-show="isTodaySelected" class="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">
+              🟢 આજની એપોઇન્ટમેન્ટ્સ (Today)
+            </span>
           </div>
 
           <!-- Doctor Filter -->
