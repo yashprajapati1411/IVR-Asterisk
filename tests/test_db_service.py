@@ -67,7 +67,8 @@ def test_booking_transaction_success(test_db):
     result = test_db.book_appointment(
         doctor_id=1,
         mobile_number=mobile,
-        patient_name_gu=patient_name
+        patient_name_gu=patient_name,
+        current_time="17:30"
     )
     assert result["success"] is True
     assert "APT-" in result["appointment_code"]
@@ -75,17 +76,17 @@ def test_booking_transaction_success(test_db):
     assert result["mobile_number"] == mobile
 
     # Check that slot count decreased by 1
-    avail_after = test_db.check_availability(1)
+    avail_after = test_db.check_availability(1, current_time="17:30")
     assert avail_after["slots"][0]["slots_left"] == 7
 
 def test_patient_upsert(test_db):
     mobile = "9876543210"
     # Booking 1
-    res1 = test_db.book_appointment(1, mobile, "પહેલું નામ")
+    res1 = test_db.book_appointment(1, mobile, "પહેલું નામ", current_time="17:30")
     assert res1["success"] is True
 
     # Booking 2 with same mobile should update patient name, not fail
-    res2 = test_db.book_appointment(1, mobile, "બીજું નામ")
+    res2 = test_db.book_appointment(1, mobile, "બીજું નામ", current_time="17:30")
     assert res2["success"] is True
 
     conn = test_db.get_connection()

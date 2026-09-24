@@ -219,6 +219,38 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    formatTimePart(timeStr, isEnd = false) {
+      if (!timeStr) return null;
+      let clean = timeStr.trim();
+      let parts = clean.split(':');
+      if (parts.length < 1) return null;
+      let h = parseInt(parts[0], 10);
+      let m = parts[1] ? parts[1].padStart(2, '0') : '00';
+      if (isNaN(h)) return null;
+
+      if (isEnd && (h === 0 || h === 24) && parseInt(m, 10) === 0) {
+        return { hour12: 12, display: `12:${m}`, ampm: 'AM', periodGu: 'રાત્રે' };
+      }
+
+      let ampm = h >= 12 ? 'PM' : 'AM';
+      let hour12 = h % 12 || 12;
+      let periodGu = 'સવારે';
+      if (h >= 12 && h < 16) periodGu = 'બપોરે';
+      else if (h >= 16 && h < 20) periodGu = 'સાંજે';
+      else if (h >= 20 || h === 0) periodGu = 'રાત્રે';
+
+      return { hour12, display: `${hour12}:${m}`, ampm, periodGu };
+    },
+
+    updateCustomSlotLabels() {
+      const s = this.formatTimePart(this.customSlot.start_time, false);
+      const e = this.formatTimePart(this.customSlot.end_time, true);
+      if (s && e) {
+        this.customSlot.slot_time_gu = `${s.periodGu} ${s.display} થી ${e.display}`;
+        this.customSlot.slot_time_en = `${s.display} ${s.ampm} to ${e.display} ${e.ampm}`;
+      }
+    },
+
     openCustomSlotModal() {
       this.customSlot = {
         slot_id: null,
@@ -231,6 +263,7 @@ document.addEventListener('alpine:init', () => {
         max_slots: 8,
         is_active: 1
       };
+      this.updateCustomSlotLabels();
       this.showSlotModal = true;
     },
 

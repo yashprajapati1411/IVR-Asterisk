@@ -25,6 +25,40 @@ def get_current_ist_time_str() -> str:
     """Returns current time in IST (HH:MM)."""
     return get_current_ist_datetime().strftime("%H:%M")
 
+def normalize_time_str(t: str, is_end_time: bool = False, start_time: Optional[str] = None) -> str:
+    """
+    Normalizes time strings like '9:00' -> '09:00', '0:00' -> '00:00'.
+    If is_end_time is True and time is '00:00' or '0:00' or '24:00' (or start_time > '12:00'),
+    returns '24:00' so that midnight end-times sort after 23:00 and pass time comparisons cleanly.
+    """
+    if not t:
+        return "00:00"
+    t = str(t).strip()
+    if t in ("0:00", "00:00", "24:00"):
+        if is_end_time:
+            return "24:00"
+        return "00:00"
+    parts = t.split(":")
+    if len(parts) == 2:
+        try:
+            h = int(parts[0])
+            m = int(parts[1])
+            if is_end_time and h == 0 and m == 0:
+                return "24:00"
+            return f"{h:02d}:{m:02d}"
+        except ValueError:
+            pass
+    return t
+
+def is_slot_expired(end_time: str, filter_time: str, start_time: Optional[str] = None) -> bool:
+    """
+    Returns True if slot end_time has passed relative to filter_time (both HH:MM strings).
+    Handles midnight end_times ('24:00', '00:00', '0:00') correctly.
+    """
+    norm_end = normalize_time_str(end_time, is_end_time=True, start_time=start_time)
+    norm_filter = normalize_time_str(filter_time)
+    return norm_end <= norm_filter
+
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ivr_appointments.db")
 
 class DatabaseService:
@@ -286,9 +320,8 @@ class DatabaseService:
 
         available_slots = []
         for s in schedules:
-            # Filter out past slots for today (where end_time <= filter_time)
             if filter_time and target_date == today_str:
-                if s["end_time"] <= filter_time:
+                if is_slot_expired(s["end_time"], filter_time, s["start_time"]):
                     continue
 
             slot_time_gu = s["slot_time_gu"]
@@ -403,7 +436,7 @@ class DatabaseService:
                         break
             else:
                 for sch in schedules:
-                    if not (filter_time and target_date == today_str and sch["end_time"] <= filter_time):
+                    if not (filter_time and target_date == today_str and is_slot_expired(sch["end_time"], filter_time, sch["start_time"])):
                         schedule = sch
                         break
 
@@ -412,7 +445,7 @@ class DatabaseService:
                 conn.close()
                 return {"success": False, "error": "NO_SCHEDULE"}
 
-            if filter_time and target_date == today_str and schedule["end_time"] <= filter_time:
+            if filter_time and target_date == today_str and is_slot_expired(schedule["end_time"], filter_time, schedule["start_time"]):
                 cursor.execute("ROLLBACK")
                 conn.close()
                 return {"success": False, "error": "SLOT_EXPIRED"}
@@ -604,6 +637,15 @@ class DatabaseService:
         slot_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Creates or updates a schedule slot for a specific date or default template."""
+        start_time = normalize_time_str(start_time, is_end_time=False)
+        end_time = normalize_time_str(end_time, is_end_time=True, start_time=start_time)
+
+        # Sanitize zero or broken midnight strings in labels
+        if "0:00" in slot_time_gu or "00:00" in slot_time_gu:
+            slot_time_gu = slot_time_gu.replace("0:00 PM", "12:00 AM").replace("0:00 AM", "12:00 AM").replace("0:00", "12:00").replace("00:00", "12:00")
+        if "0:00" in slot_time_en or "00:00" in slot_time_en:
+            slot_time_en = slot_time_en.replace("0:00 PM", "12:00 AM").replace("0:00 AM", "12:00 AM").replace("0:00", "12:00 AM").replace("00:00", "12:00 AM")
+
         conn = self.get_connection()
         cursor = conn.cursor()
 

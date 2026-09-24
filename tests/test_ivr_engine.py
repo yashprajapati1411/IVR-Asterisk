@@ -58,7 +58,8 @@ class MockAGIChannel(AGIChannel):
         self.is_hungup = True
 
 @pytest.fixture
-def setup_env():
+def setup_env(monkeypatch):
+    monkeypatch.setattr("services.db_service.get_current_ist_time_str", lambda: "11:00")
     if os.path.exists(TEST_DB_PATH):
         os.remove(TEST_DB_PATH)
     db = DatabaseService(db_path=TEST_DB_PATH)
