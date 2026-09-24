@@ -481,6 +481,8 @@ class DatabaseService:
         search_query: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Returns appointments with patient & doctor details for dashboard."""
+        self.recalculate_and_sync_all_tokens()
+
         conn = self.get_connection()
         cursor = conn.cursor()
 
