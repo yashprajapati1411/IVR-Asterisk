@@ -7,6 +7,24 @@ import os
 import datetime
 from typing import Optional, Dict, Any, List
 
+def get_current_ist_datetime() -> datetime.datetime:
+    """Returns current datetime in Indian Standard Time (Asia/Kolkata, UTC+5:30)."""
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+        return datetime.datetime.now(tz)
+    except Exception:
+        utc_now = datetime.datetime.now(datetime.timezone.utc)
+        return utc_now + datetime.timedelta(hours=5, minutes=30)
+
+def get_current_ist_date_str() -> str:
+    """Returns current ISO date in IST (YYYY-MM-DD)."""
+    return get_current_ist_datetime().date().isoformat()
+
+def get_current_ist_time_str() -> str:
+    """Returns current time in IST (HH:MM)."""
+    return get_current_ist_datetime().strftime("%H:%M")
+
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ivr_appointments.db")
 
 class DatabaseService:
@@ -230,7 +248,7 @@ class DatabaseService:
         Filters out past hourly slots for today.
         Returns dict with available=True/False and list of available hourly slots.
         """
-        today_str = datetime.date.today().isoformat()
+        today_str = get_current_ist_date_str()
         if not target_date:
             target_date = today_str
         
@@ -239,7 +257,7 @@ class DatabaseService:
 
         filter_time = None
         if target_date == today_str:
-            filter_time = current_time if current_time is not None else datetime.datetime.now().strftime("%H:%M")
+            filter_time = current_time if current_time is not None else get_current_ist_time_str()
 
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -334,7 +352,7 @@ class DatabaseService:
         5. Creates appointment.
         6. Returns appointment code (APT-X) and token number.
         """
-        today_str = datetime.date.today().isoformat()
+        today_str = get_current_ist_date_str()
         if not target_date:
             target_date = today_str
             
@@ -343,7 +361,7 @@ class DatabaseService:
 
         filter_time = None
         if target_date == today_str and source == "IVR":
-            filter_time = current_time if current_time is not None else datetime.datetime.now().strftime("%H:%M")
+            filter_time = current_time if current_time is not None else get_current_ist_time_str()
 
         conn = self.get_connection()
         cursor = conn.cursor()

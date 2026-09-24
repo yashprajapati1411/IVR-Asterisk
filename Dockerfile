@@ -2,10 +2,12 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Kolkata
 ENV ASTERISK_SOUNDS_DIR=/var/lib/asterisk/sounds/ivr
 
 # Install Asterisk, Python, audio tools, and dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
     asterisk \
     asterisk-modules \
     asterisk-core-sounds-en \
