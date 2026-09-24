@@ -275,8 +275,8 @@ class IVREngine:
                     await self.channel.stream_file(self._sound("gu/invalid_option"))
 
         # Default: pick first available slot if user stayed on line
-        self.session.selected_slot_time_gu = slots[0]["slot_time_gu"]
-        self.session.state = "MOBILE_CAPTURE"
+        await self.channel.stream_file(self._sound("gu/timeout_disconnect"))
+        self.session.state = "HANGUP"
 
     # -------------------------------------------------------------------------
     # 3. MOBILE NUMBER CAPTURE & VALIDATION
@@ -342,7 +342,7 @@ class IVREngine:
                     await self.channel.stream_file(self._sound("gu/invalid_option"))
 
         # Fallback: User stayed on line through 3 attempts -> proceed to name capture
-        return True
+        return False
 
     # -------------------------------------------------------------------------
     # 4. NAME CAPTURE (VOICE RECORDING + SARVAM STT)
@@ -390,7 +390,7 @@ class IVREngine:
             if confirm_digit == "#":
                 confirm_digit = await self.channel.get_data(self._sound("gu/beep"), timeout_ms=5000, max_digits=1)
 
-            if confirm_digit == "1" or confirm_digit in ("#", "", None) or (attempts >= max_attempts - 1 and recognized_name):
+            if confirm_digit == "1":
                 self.session.patient_name_gu = recognized_name
                 self.session.state = "FINAL_CONFIRMATION"
                 return
@@ -402,8 +402,8 @@ class IVREngine:
                 if attempts < max_attempts:
                     await self.channel.stream_file(self._sound("gu/invalid_option"))
 
-        self.session.patient_name_gu = recognized_name or "દર્દી"
-        self.session.state = "FINAL_CONFIRMATION"
+        await self.channel.stream_file(self._sound("gu/timeout_disconnect"))
+        self.session.state = "HANGUP"
 
     # -------------------------------------------------------------------------
     # 6. STREAMLINED FINAL CONFIRMATION
@@ -423,7 +423,7 @@ class IVREngine:
             if digit == "#":
                 digit = await self.channel.get_data(self._sound("gu/beep"), timeout_ms=5000, max_digits=1)
 
-            if digit == "1" or (attempts >= 2):
+            if digit == "1":
                 self.session.state = "BOOKING_TRANSACTION"
                 return
             elif digit == "2":
@@ -437,7 +437,8 @@ class IVREngine:
                 if attempts < 3:
                     await self.channel.stream_file(self._sound("gu/invalid_option"))
 
-        self.session.state = "BOOKING_TRANSACTION"
+        await self.channel.stream_file(self._sound("gu/timeout_disconnect"))
+        self.session.state = "HANGUP"
 
     # -------------------------------------------------------------------------
     # 7. DB TRANSACTION & BOOKING SUCCESS ANNOUNCEMENT
