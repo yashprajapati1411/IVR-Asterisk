@@ -5,7 +5,20 @@ Uses SQLite with WAL mode and atomic transaction locking (BEGIN IMMEDIATE).
 import sqlite3
 import os
 import datetime
+import re
 from typing import Optional, Dict, Any, List
+
+def sanitize_slot_label(label: str, is_english: bool = False) -> str:
+    """
+    Safely sanitizes standalone 0:00 or 00:00 in time labels without 
+    corrupting 10:00 or 20:00 into 112:00.
+    """
+    if not label:
+        return ""
+    repl = "12:00 AM" if is_english else "12:00"
+    label = re.sub(r'(?<!\d)0?0:00\s*(?:PM|AM)', '12:00 AM' if is_english else '12:00', label, flags=re.IGNORECASE)
+    label = re.sub(r'(?<!\d)0?0:00\b', repl, label)
+    return label
 
 def get_current_ist_datetime() -> datetime.datetime:
     """Returns current datetime in Indian Standard Time (Asia/Kolkata, UTC+5:30)."""
@@ -640,11 +653,9 @@ class DatabaseService:
         start_time = normalize_time_str(start_time, is_end_time=False)
         end_time = normalize_time_str(end_time, is_end_time=True, start_time=start_time)
 
-        # Sanitize zero or broken midnight strings in labels
-        if "0:00" in slot_time_gu or "00:00" in slot_time_gu:
-            slot_time_gu = slot_time_gu.replace("0:00 PM", "12:00 AM").replace("0:00 AM", "12:00 AM").replace("0:00", "12:00").replace("00:00", "12:00")
-        if "0:00" in slot_time_en or "00:00" in slot_time_en:
-            slot_time_en = slot_time_en.replace("0:00 PM", "12:00 AM").replace("0:00 AM", "12:00 AM").replace("0:00", "12:00 AM").replace("00:00", "12:00 AM")
+        # Sanitize zero or broken midnight strings in labels safely
+        slot_time_gu = sanitize_slot_label(slot_time_gu, is_english=False)
+        slot_time_en = sanitize_slot_label(slot_time_en, is_english=True)
 
         conn = self.get_connection()
         cursor = conn.cursor()
