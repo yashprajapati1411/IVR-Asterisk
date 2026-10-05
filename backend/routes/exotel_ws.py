@@ -95,8 +95,8 @@ async def exotel_voicebot_websocket(websocket: WebSocket, pace_audio: bool = Tru
         start_data = json.loads(start_msg)
 
         if start_data.get("event") == "start":
-            stream_sid = start_data.get("stream_sid", "")
             start_payload = start_data.get("start", {})
+            stream_sid = start_data.get("stream_sid") or start_payload.get("stream_sid") or ""
             call_sid = start_payload.get("call_sid", "")
             caller_id = start_payload.get("from", "")
             logger.info(f"[Exotel Call Start] Caller: {caller_id}, CallSID: {call_sid}, StreamSID: {stream_sid}")

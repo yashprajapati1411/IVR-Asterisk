@@ -111,7 +111,7 @@ class ExotelWSChannel:
                 # Read raw PCM frames
                 raw_pcm = w.readframes(w.getnframes())
 
-            chunk_size = 3200  # 100ms at 8kHz 16-bit mono PCM (8000 * 2 bytes * 0.1s = 1600 samples = 3200 bytes)
+            chunk_size = 1600  # 100ms at 8kHz 16-bit mono PCM (800 samples * 2 bytes = 1600 bytes)
             offset = 0
 
             while offset < len(raw_pcm) and not self.is_hungup:
@@ -131,23 +131,19 @@ class ExotelWSChannel:
                     padding = 320 - (len(chunk) % 320)
                     chunk += b"\x00" * padding
 
-                payload = base64.b64encode(chunk).decode("utf-8")
+                payload = base64.b64encode(chunk).decode("ascii")
                 msg = {
                     "event": "media",
                     "stream_sid": self.stream_sid,
-                    "sequence_number": str(self.sequence_number),
                     "media": {
-                        "chunk": self.sequence_number,
-                        "timestamp": str(self.sequence_number * 100),
                         "payload": payload
                     }
                 }
-                self.sequence_number += 1
                 await self.websocket.send_text(json.dumps(msg))
 
                 if self.pace_audio:
-                    # 90ms sleep to keep real-time pacing with caller buffer
-                    await asyncio.sleep(0.09)
+                    # 98ms sleep for 100ms chunk keeps smooth real-time stream without buffer overflow
+                    await asyncio.sleep(0.098)
 
             return None
 
