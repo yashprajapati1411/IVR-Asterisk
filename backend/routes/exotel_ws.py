@@ -39,6 +39,7 @@ async def _listen_incoming_exotel_events(websocket: WebSocket, channel: ExotelWS
 
             data = json.loads(message_text)
             event = data.get("event")
+            logger.info(f"[Exotel WS Inbound] event='{event}' keys={list(data.keys())}")
 
             if event == "media":
                 payload = data.get("media", {}).get("payload", "")
@@ -54,12 +55,12 @@ async def _listen_incoming_exotel_events(websocket: WebSocket, channel: ExotelWS
                     await channel.dtmf_queue.put(digit)
 
             elif event == "stop":
-                logger.info(f"[Exotel Event] Call stream stopped by Exotel: {data.get('stop')}")
+                logger.info(f"[Exotel Event] Call stream stopped by Exotel: {data}")
                 channel.is_hungup = True
                 break
 
             elif event == "mark":
-                logger.debug(f"[Exotel Mark] Milestone reached: {data.get('mark')}")
+                logger.info(f"[Exotel Mark] Milestone reached: {data.get('mark')}")
 
     except WebSocketDisconnect:
         logger.info("[Exotel WebSocket] Client disconnected.")
@@ -99,6 +100,7 @@ async def exotel_voicebot_websocket(websocket: WebSocket, pace_audio: bool = Tru
             call_sid = start_payload.get("call_sid", "")
             caller_id = start_payload.get("from", "")
             logger.info(f"[Exotel Call Start] Caller: {caller_id}, CallSID: {call_sid}, StreamSID: {stream_sid}")
+            logger.info(f"[Exotel START FULL DATA]: {json.dumps(start_data)}")
         else:
             logger.warning(f"[Exotel Handshake] Unexpected second event: {start_data.get('event')}")
 
