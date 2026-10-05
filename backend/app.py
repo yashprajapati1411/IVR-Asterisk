@@ -18,6 +18,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from backend.routes.appointments import router as appointments_router
 from backend.routes.schedules import router as schedules_router
 from backend.routes.doctors import router as doctors_router
+from backend.routes.exotel_ws import router as exotel_router
 from services.db_service import DatabaseService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -41,6 +42,7 @@ db.seed_initial_data()
 app.include_router(appointments_router)
 app.include_router(schedules_router)
 app.include_router(doctors_router)
+app.include_router(exotel_router, prefix="/exotel")
 
 @app.get("/")
 def read_root():
