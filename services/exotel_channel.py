@@ -134,9 +134,11 @@ class ExotelWSChannel:
                 payload = base64.b64encode(chunk).decode("utf-8")
                 msg = {
                     "event": "media",
-                    "sequence_number": self.sequence_number,
                     "stream_sid": self.stream_sid,
+                    "sequence_number": str(self.sequence_number),
                     "media": {
+                        "chunk": self.sequence_number,
+                        "timestamp": str(self.sequence_number * 100),
                         "payload": payload
                     }
                 }
