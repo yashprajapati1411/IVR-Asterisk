@@ -35,7 +35,7 @@ PROMPTS = {
     ),
     "other_info": (
         "ફીસની માહિતી. નવા કેસનો ચાર્જ છસો રૂપિયા છે. જૂના કેસના ત્રણસો રૂપિયા છે. "
-        "જૂનો કેસ બે મહિના માટે જ માન્ય ગણાશે. એના ઉપરાંત નવો કેસ કઢાવવો પડશે. "
+        "જૂનો કેસ ત્રણ મહિના માટે જ માન્ય ગણાશે. એના ઉપરાંત નવો કેસ કઢાવવો પડશે. "
         "જોઈન્ટના દુખાવા માટે ડૉક્ટર શૈશવ સોનીની સલાહ લો. કરોડરજ્જુના દુખાવા માટે ડૉક્ટર જયદીપ પટેલની સલાહ લો. "
         "વધુ માહિતી માટે હોસ્પિટલની મુલાકાત લો. "
         "મુખ્ય મેનુ માટે 1 દબાવો."
@@ -92,7 +92,6 @@ PROMPTS = {
 
 # Mapping to external recorded clips if available
 EXTERNAL_AUDIO_SOURCES = {
-    "other_info": "other_information.mp3",
     "enter_mobile": "collect_phone.mp3",
     "invalid_mobile": "invalid_phone.mp3",
     "no_slots_today": "no_slots.mp3",
