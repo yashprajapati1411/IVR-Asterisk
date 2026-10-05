@@ -122,6 +122,8 @@ class IVREngine:
                     await self._state_booking_transaction()
                 elif self.session.state == "OTHER_INFO":
                     await self._state_other_info()
+                elif self.session.state == "RECEPTION_NUMBER":
+                    await self._state_reception_number()
                 elif self.session.state in ("DONE", "HANGUP"):
                     break
                 else:
@@ -170,6 +172,10 @@ class IVREngine:
                 self.session.state = "OTHER_INFO"
                 return
 
+            elif digit == "9":
+                self.session.state = "RECEPTION_NUMBER"
+                return
+
             elif digit == "0":
                 await self.channel.stream_file(self._sound("gu/connecting_receptionist"))
                 self.session.state = "TRANSFER_RECEPTIONIST"
@@ -207,6 +213,51 @@ class IVREngine:
             return
 
         # 20 seconds timeout with no key pressed -> goodbye and hangup
+        await self.channel.stream_file(self._sound("gu/goodbye"))
+        self.session.state = "HANGUP"
+
+    # -------------------------------------------------------------------------
+    # 2b. RECEPTION PHONE NUMBER
+    # -------------------------------------------------------------------------
+    async def _state_reception_number(self):
+        """
+        Plays Hospital Reception Phone Number (9016771721):
+        'રિસેપ્શનનો નંબર છે: 9 0 1 6 7 7 1 7 2 1. નંબર ફરી સાંભળવા માટે 1 દબાવો, મુખ્ય મેનુમાં જવા માટે 2 દબાવો.'
+        - Press 1: Repeat number and menu options.
+        - Press 2: Return to Main Menu (WELCOME).
+        - No input for 20 seconds: Repeat number once more, then goodbye and hangup.
+        """
+        attempts = 0
+        max_repeats = 5
+
+        while attempts < max_repeats and not self.channel.is_hungup:
+            digit = await self.channel.get_data(
+                self._sound("gu/reception_number"),
+                timeout_ms=20000,
+                max_digits=1
+            )
+            logger.info(f"Reception Number menu input: '{digit}'")
+
+            if digit == "1":
+                attempts += 1
+                continue
+
+            elif digit == "2":
+                self.session.state = "WELCOME"
+                return
+
+            elif digit is None or digit == "":
+                # 20-second timeout: repeat number once more and disconnect
+                logger.info("Reception Number menu timeout (20s) -> repeating number and disconnecting")
+                await self.channel.stream_file(self._sound("gu/reception_number_only"))
+                await self.channel.stream_file(self._sound("gu/goodbye"))
+                self.session.state = "HANGUP"
+                return
+
+            else:
+                attempts += 1
+                await self.channel.stream_file(self._sound("gu/invalid_option"))
+
         await self.channel.stream_file(self._sound("gu/goodbye"))
         self.session.state = "HANGUP"
 

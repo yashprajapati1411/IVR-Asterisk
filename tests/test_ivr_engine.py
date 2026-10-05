@@ -61,14 +61,20 @@ class MockAGIChannel(AGIChannel):
 def setup_env(monkeypatch):
     monkeypatch.setattr("services.db_service.get_current_ist_time_str", lambda: "11:00")
     if os.path.exists(TEST_DB_PATH):
-        os.remove(TEST_DB_PATH)
+        try:
+            os.remove(TEST_DB_PATH)
+        except OSError:
+            pass
     db = DatabaseService(db_path=TEST_DB_PATH)
     db.seed_initial_data(reset=True)
     stt = SarvamSTTService(api_key="mock_key")
     tts = TTSService(api_key="mock_key", cache_dir="test_engine_cache")
     yield db, stt, tts
-    if os.path.exists(TEST_DB_PATH):
-        os.remove(TEST_DB_PATH)
+    try:
+        if os.path.exists(TEST_DB_PATH):
+            os.remove(TEST_DB_PATH)
+    except OSError:
+        pass
 
 @pytest.mark.asyncio
 async def test_happy_path_dr_shaishav(setup_env):
@@ -275,3 +281,37 @@ async def test_final_confirmation_cancel_to_menu(setup_env):
 
     assert engine.session.appointment_code is None # No appointment created
     assert any("other_info" in cmd for cmd in channel.files_streamed)
+
+
+@pytest.mark.asyncio
+async def test_path_reception_number_repeat_and_return_to_main_menu(setup_env):
+    db, stt, tts = setup_env
+    # 1: Welcome -> 9 (Reception Number)
+    # 2: At Reception Number -> 1 (Repeat Number)
+    # 3: At Reception Number -> 2 (Return to Main Menu)
+    # 4: Welcome -> 3 (Other Info -> Hangup)
+    inputs = ["9", "1", "2", "3"]
+    channel = MockAGIChannel(inputs=inputs)
+    engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
+
+    await engine.run()
+
+    assert any("reception_number" in cmd for cmd in channel.files_streamed)
+    assert any("other_info" in cmd for cmd in channel.files_streamed)
+    assert engine.session.state == "HANGUP"
+
+@pytest.mark.asyncio
+async def test_path_reception_number_timeout_disconnect(setup_env):
+    db, stt, tts = setup_env
+    # 1: Welcome -> 9 (Reception Number)
+    # 2: At Reception Number -> Timeout (no input)
+    inputs = ["9"]
+    channel = MockAGIChannel(inputs=inputs)
+    engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
+
+    await engine.run()
+
+    assert any("reception_number" in cmd for cmd in channel.files_streamed)
+    assert any("reception_number_only" in cmd for cmd in channel.files_streamed)
+    assert any("goodbye" in cmd for cmd in channel.files_streamed)
+    assert engine.session.state == "HANGUP"
