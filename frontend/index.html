@@ -159,6 +159,17 @@
               <i class="fa-solid fa-rotate-left text-xs"></i>
               <span>આજે (Today)</span>
             </button>
+            <button 
+              x-show="selectedDate" 
+              @click="setAllDates()" 
+              class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2 py-1 rounded transition-all flex items-center space-x-1"
+              title="Show all appointments across all dates">
+              <i class="fa-solid fa-list text-xs"></i>
+              <span>બધી તારીખો (All Dates)</span>
+            </button>
+            <span x-show="!selectedDate" class="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">
+              🟣 બધી તારીખો (All Dates)
+            </span>
             <span x-show="isTodaySelected" class="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">
               🟢 આજની એપોઇન્ટમેન્ટ્સ (Today)
             </span>

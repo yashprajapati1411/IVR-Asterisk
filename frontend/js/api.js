@@ -8,7 +8,11 @@ const API = {
   },
 
   async getAppointments(date = '', doctorId = '', search = '') {
-    let url = `/api/appointments?date=${date}&doctor_id=${doctorId}&search=${encodeURIComponent(search)}`;
+    const params = [];
+    if (date && String(date).trim()) params.push(`date=${encodeURIComponent(String(date).trim())}`);
+    if (doctorId) params.push(`doctor_id=${encodeURIComponent(doctorId)}`);
+    if (search && String(search).trim()) params.push(`search=${encodeURIComponent(String(search).trim())}`);
+    let url = '/api/appointments' + (params.length ? `?${params.join('&')}` : '');
     const res = await fetch(url);
     return res.json();
   },

@@ -409,9 +409,17 @@ class IVREngine:
         attempts = 0
         max_attempts = 3
         recognized_name = ""
+        prompt_type = "initial"
 
         while attempts < max_attempts and not self.channel.is_hungup:
-            await self.channel.stream_file(self._sound("gu/speak_name"))
+            if prompt_type == "initial":
+                await self.channel.stream_file(self._sound("gu/speak_name"))
+            elif prompt_type == "unheard":
+                unheard_prompt = self._sound(self.tts.synthesize_gujarati("અવાજ સંભળાયો નથી. કૃપા કરીને બીપ પછી તમારું નામ ફરીથી જણાવો."))
+                await self.channel.stream_file(unheard_prompt)
+            elif prompt_type == "retry":
+                retry_prompt = self._sound(self.tts.synthesize_gujarati("કૃપા કરીને બીપ પછી તમારું નામ ફરીથી જણાવો."))
+                await self.channel.stream_file(retry_prompt)
 
             rec_filename = f"rec_name_{self.session.unique_id}_{attempts}"
             cache_dir = getattr(self.tts, "cache_dir", None) or os.path.join(self.sounds_dir, "cache")
@@ -441,15 +449,11 @@ class IVREngine:
 
             if not recognized_name:
                 attempts += 1
-                if attempts < max_attempts:
-                    retry_prompt = self._sound(self.tts.synthesize_gujarati("અવાજ સંભળાયો નથી. કૃપા કરીને બીપ પછી તમારું નામ ફરીથી જણાવો."))
-                    await self.channel.stream_file(retry_prompt)
-                else:
+                prompt_type = "unheard"
+                if attempts >= max_attempts:
                     recognized_name = "દર્દી"
-                if not recognized_name or recognized_name == "દર્દી":
-                    if attempts >= max_attempts:
-                        break
-                    continue
+                    break
+                continue
 
             confirm_text = f"તમારું નામ {recognized_name} છે. સાચું હોય તો 1 દબાવો. ફરીથી કહેવા માટે 2 દબાવો."
             confirm_audio = self._sound(self.tts.synthesize_gujarati(confirm_text))
@@ -464,9 +468,11 @@ class IVREngine:
                 return
             elif confirm_digit == "2":
                 attempts += 1
+                prompt_type = "retry"
                 continue
             else:
                 attempts += 1
+                prompt_type = "unheard"
                 if attempts < max_attempts:
                     await self.channel.stream_file(self._sound("gu/invalid_option"))
 

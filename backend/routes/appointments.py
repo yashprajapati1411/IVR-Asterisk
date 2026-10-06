@@ -17,7 +17,9 @@ def list_appointments(
 ):
     """Fetches real-time appointments list with search and filters."""
     try:
-        appts = db.get_appointments_list(date_str=date, doctor_id=doctor_id, search_query=search)
+        clean_date = date.strip() if date and date.strip() else None
+        clean_search = search.strip() if search and search.strip() else None
+        appts = db.get_appointments_list(date_str=clean_date, doctor_id=doctor_id, search_query=clean_search)
         return {"success": True, "count": len(appts), "appointments": appts}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

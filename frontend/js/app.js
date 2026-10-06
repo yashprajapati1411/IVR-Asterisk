@@ -8,15 +8,20 @@ document.addEventListener('alpine:init', () => {
     // Filters & States
     doctors: [],
     selectedDoctorId: '',
-    selectedDate: new Date().toISOString().split('T')[0],
+    selectedDate: new Date().toLocaleDateString('en-CA'),
     searchQuery: '',
 
     get isTodaySelected() {
-      return this.selectedDate === new Date().toISOString().split('T')[0];
+      return this.selectedDate === new Date().toLocaleDateString('en-CA');
     },
 
     setTodayDate() {
-      this.selectedDate = new Date().toISOString().split('T')[0];
+      this.selectedDate = new Date().toLocaleDateString('en-CA');
+      this.fetchAppointments();
+    },
+
+    setAllDates() {
+      this.selectedDate = '';
       this.fetchAppointments();
     },
     
