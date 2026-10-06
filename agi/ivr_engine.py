@@ -557,12 +557,11 @@ class IVREngine:
         spoken_appt_num = str(token_num) if token_num is not None else (appt_code.replace("APT-", "") if "APT-" in appt_code else appt_code)
 
         success_text = (
-            f"તમારી એપોઇન્ટમેન્ટ સફળતાપૂર્વક બુક થઈ ગઈ છે. "
+            f"તમારી એપોઇન્ટમેન્ટ આજે {self.session.selected_slot_time_gu} {self.session.selected_doctor_name_gu} માટે સફળતાપૂર્વક થઈ ગઈ છે. "
+            f"તમારો એપોઇન્ટમેન્ટ નંબર {spoken_appt_num} છે. "
             f"તમારું નામ {self.session.patient_name_gu} છે. "
             f"તમારો મોબાઇલ નંબર {' '.join(self.session.mobile_number)} છે. "
-            f"તમારો એપોઇન્ટમેન્ટ નંબર {spoken_appt_num} છે. "
-            f"તમારો સમય {self.session.selected_slot_time_gu} છે. "
-            f"{self.session.selected_doctor_name_gu} માટે ત્રિનય ઓર્થોપેડિક હોસ્પિટલ તરફથી આભાર."
+            f"ત્રિનય ઓર્થોપેડિક હોસ્પિટલ તરફથી આભાર."
         )
         success_audio = self._sound(self.tts.synthesize_gujarati(success_text))
 
