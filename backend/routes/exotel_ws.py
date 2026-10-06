@@ -130,7 +130,7 @@ async def exotel_voicebot_websocket(websocket: WebSocket, pace_audio: bool = Tru
             db_service=db,
             stt_service=stt,
             tts_service=tts,
-            sounds_dir=os.path.join(project_root, "sounds")
+            sounds_dir=os.getenv("ASTERISK_SOUNDS_DIR", os.path.join(project_root, "sounds"))
         )
         logger.info(f"[Exotel IVR] Running IVR State Machine for caller: {caller_id}...")
         await engine.run()

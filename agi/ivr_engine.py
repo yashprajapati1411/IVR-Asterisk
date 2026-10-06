@@ -414,12 +414,29 @@ class IVREngine:
             await self.channel.stream_file(self._sound("gu/speak_name"))
 
             rec_filename = f"rec_name_{self.session.unique_id}_{attempts}"
-            rec_full_path = os.path.join(self.tts.cache_dir, f"{rec_filename}.wav")
-            record_target = f"{self.sounds_dir}/cache/{rec_filename}".replace("\\", "/")
+            cache_dir = getattr(self.tts, "cache_dir", None) or os.path.join(self.sounds_dir, "cache")
+            os.makedirs(cache_dir, exist_ok=True)
+            rec_target = os.path.join(cache_dir, rec_filename).replace("\\", "/")
+            rec_full_path = f"{rec_target}.wav"
 
-            await self.channel.record_file(record_target, format_type="wav", escape_digits="#", timeout_ms=6000, beep=True, silence_sec=2)
+            await self.channel.record_file(rec_target, format_type="wav", escape_digits="#", timeout_ms=6000, beep=True, silence_sec=2)
 
-            stt_result = self.stt.transcribe_audio(rec_full_path, language_code="gu-IN")
+            # Search across all possible cache directories to guarantee locating the audio file
+            audio_to_transcribe = rec_full_path
+            candidate_paths = [
+                rec_full_path,
+                os.path.join(self.sounds_dir, "cache", f"{rec_filename}.wav"),
+                f"/var/lib/asterisk/sounds/ivr/cache/{rec_filename}.wav",
+                f"/app/sounds/cache/{rec_filename}.wav",
+                os.path.join(getattr(self.tts, "cache_dir", ""), f"{rec_filename}.wav") if hasattr(self.tts, "cache_dir") else None,
+            ]
+            for p in candidate_paths:
+                if p and os.path.exists(p) and os.path.getsize(p) >= 100:
+                    audio_to_transcribe = p
+                    break
+
+            logger.info(f"Passing audio file to STT: {audio_to_transcribe} (exists={os.path.exists(audio_to_transcribe)})")
+            stt_result = self.stt.transcribe_audio(audio_to_transcribe, language_code="gu-IN")
             recognized_name = stt_result.get("transcript", "").strip()
 
             if not recognized_name:

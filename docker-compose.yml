@@ -20,6 +20,7 @@ services:
       - ./docker-entrypoint.sh:/app/docker-entrypoint.sh
       - ./agi:/app/agi
       - ./services:/app/services
+      - ./backend:/app/backend
     ports:
       - "5060:5060/udp"
       - "5060:5060/tcp"

@@ -100,6 +100,20 @@ class SarvamSTTService:
             }
 
         if not os.path.exists(audio_filepath) or os.path.getsize(audio_filepath) < 500:
+            # Fallback: check alternative cache directories in container or project
+            base = os.path.basename(audio_filepath)
+            alt_candidates = [
+                f"/var/lib/asterisk/sounds/ivr/cache/{base}",
+                f"/app/sounds/cache/{base}",
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sounds", "cache", base)
+            ]
+            for cand in alt_candidates:
+                if os.path.exists(cand) and os.path.getsize(cand) >= 500:
+                    logger.info(f"Resolved alternative audio path for STT: {cand}")
+                    audio_filepath = cand
+                    break
+
+        if not os.path.exists(audio_filepath) or os.path.getsize(audio_filepath) < 500:
             logger.warning(f"Audio file missing or empty: {audio_filepath}")
             return {
                 "success": False,
