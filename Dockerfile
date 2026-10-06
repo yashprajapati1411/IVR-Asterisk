@@ -34,6 +34,7 @@ COPY services/ /app/services/
 COPY models/ /app/models/
 COPY scripts/ /app/scripts/
 COPY sounds/ /app/sounds/
+COPY frontend/ /app/frontend/
 
 # Copy Asterisk configuration files
 COPY asterisk_config/extensions.conf /etc/asterisk/extensions.conf

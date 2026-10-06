@@ -21,6 +21,7 @@ services:
       - ./agi:/app/agi
       - ./services:/app/services
       - ./backend:/app/backend
+      - ./frontend:/app/frontend
     ports:
       - "5060:5060/udp"
       - "5060:5060/tcp"
