@@ -212,9 +212,9 @@ class ExotelWSChannel:
         filename: str,
         format_type: str = "wav",
         escape_digits: str = "#",
-        timeout_ms: int = 6000,
+        timeout_ms: int = 4500,
         beep: bool = True,
-        silence_sec: int = 2
+        silence_sec: float = 1.5
     ) -> bool:
         """
         Records user voice from Exotel incoming media stream packets.
@@ -235,8 +235,8 @@ class ExotelWSChannel:
             except asyncio.QueueEmpty:
                 break
 
-        timeout_sec = max(3.0, timeout_ms / 1000.0)
-        silence_timeout = max(1.2, float(silence_sec))
+        timeout_sec = max(2.5, timeout_ms / 1000.0)
+        silence_timeout = max(1.0, float(silence_sec))
         frames = []
         start_time = asyncio.get_event_loop().time()
         speech_detected = False
