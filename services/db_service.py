@@ -237,7 +237,7 @@ class DatabaseService:
         cursor.execute("SELECT COUNT(*) as cnt FROM doctor_schedules WHERE slot_time_gu LIKE '%5:00 થી 8:00%' OR slot_time_gu LIKE '%10:00 થી બપોરે 1:00%'")
         has_legacy = cursor.fetchone()["cnt"] > 0
 
-        if reset or has_legacy:
+        if reset:
             cursor.execute("DELETE FROM appointments")
             cursor.execute("DELETE FROM doctor_schedules")
             cursor.execute("DELETE FROM doctors")

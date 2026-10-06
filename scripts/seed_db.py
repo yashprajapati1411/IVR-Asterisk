@@ -15,7 +15,7 @@ from services.db_service import DatabaseService
 
 def main():
     db = DatabaseService()
-    db.seed_initial_data(reset=True)
+    db.seed_initial_data(reset=False)
     
     conn = db.get_connection()
     cursor = conn.cursor()

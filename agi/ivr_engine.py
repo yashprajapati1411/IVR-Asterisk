@@ -447,6 +447,14 @@ class IVREngine:
             stt_result = self.stt.transcribe_audio(audio_to_transcribe, language_code="gu-IN")
             recognized_name = stt_result.get("transcript", "").strip()
 
+            # Clean up temporary voice recording files to protect privacy and save disk space
+            for cand in candidate_paths:
+                if cand and os.path.exists(cand):
+                    try:
+                        os.remove(cand)
+                    except Exception as err:
+                        logger.debug(f"Could not remove temp recording file {cand}: {err}")
+
             if not recognized_name:
                 attempts += 1
                 prompt_type = "unheard"
