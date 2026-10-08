@@ -147,13 +147,10 @@ def main():
             converted = _convert_to_asterisk_wav(ext_path, out_wav)
 
         if not converted:
-            logger.info(f"Synthesizing prompt '{name}' with TTS: {text[:45]}...")
             if name in ("reception_number", "reception_number_only"):
-                # Single digits at a slightly faster -10% speed rate
-                gen_path = tts.synthesize_gujarati(text, speed_rate="-10%", pace=1.0)
-            else:
-                gen_path = tts.synthesize_gujarati(text)
-
+                continue  # Generated below with exact 1-second per digit timing
+            logger.info(f"Synthesizing prompt '{name}' with TTS: {text[:45]}...")
+            gen_path = tts.synthesize_gujarati(text)
             if gen_path != out_wav and os.path.exists(gen_path):
                 with open(gen_path, "rb") as src, open(out_wav, "wb") as dst:
                     dst.write(src.read())
@@ -188,7 +185,51 @@ def main():
                 dst.write(src.read())
             logger.info(f"Generated digit '{digit}' ({gu_word}) -> {digit_wav}")
 
-    print("\nAll Gujarati prompts and digits generated successfully!")
+    # Generate reception prompts with exactly 1.0 second per digit
+    generate_reception_prompts(target_dir, tts)
+    print("\nAll Gujarati prompts, digits, and reception prompts generated successfully!")
+
+def generate_reception_prompts(target_dir: str, tts: TTSService):
+    """
+    Generates reception_number.wav and reception_number_only.wav
+    where each digit in the 10-digit number (9016771721) is spoken
+    at exactly 1.0 second per digit, allowing patients to easily note it down.
+    """
+    digits_dir = os.path.join(target_dir, "digits")
+    p_intro = tts.synthesize_gujarati("રિસેપ્શનનો નંબર છે:")
+    p_outro = tts.synthesize_gujarati("નંબર ફરી સાંભળવા માટે 1 દબાવો, મુખ્ય મેનુમાં જવા માટે 2 દબાવો.")
+
+    intro_frames = []
+    with wave.open(p_intro, 'rb') as w:
+        params = w.getparams()
+        intro_frames.append(w.readframes(w.getnframes()))
+        intro_frames.append(b'\x00' * int(8000 * 2 * 0.5))
+
+    digit_frames = []
+    digits = ['9', '0', '1', '6', '7', '7', '1', '7', '2', '1']
+    for d in digits:
+        d_path = os.path.join(digits_dir, f"{d}.wav")
+        if os.path.exists(d_path):
+            with wave.open(d_path, 'rb') as w:
+                nframes = w.getnframes()
+                digit_frames.append(w.readframes(nframes))
+                silence_needed = max(0, 8000 - nframes)
+                digit_frames.append(b'\x00' * (silence_needed * 2))
+
+    outro_frames = []
+    with wave.open(p_outro, 'rb') as w:
+        outro_frames.append(b'\x00' * int(8000 * 2 * 0.6))
+        outro_frames.append(w.readframes(w.getnframes()))
+
+    out_rec = os.path.join(target_dir, "reception_number.wav")
+    with wave.open(out_rec, 'wb') as out:
+        out.setparams(params)
+        out.writeframes(b''.join(intro_frames + digit_frames + outro_frames))
+
+    out_rec_only = os.path.join(target_dir, "reception_number_only.wav")
+    with wave.open(out_rec_only, 'wb') as out:
+        out.setparams(params)
+        out.writeframes(b''.join(intro_frames + digit_frames))
 
 if __name__ == "__main__":
     main()
