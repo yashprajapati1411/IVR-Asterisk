@@ -213,12 +213,13 @@ def generate_reception_prompts(target_dir: str, tts: TTSService):
             with wave.open(d_path, 'rb') as w:
                 nframes = w.getnframes()
                 digit_frames.append(w.readframes(nframes))
-                silence_needed = max(0, 8000 - nframes)
+                # 1.5 seconds per digit slot (12000 frames) for relaxed note-taking
+                silence_needed = max(0, int(8000 * 1.5) - nframes)
                 digit_frames.append(b'\x00' * (silence_needed * 2))
 
     outro_frames = []
     with wave.open(p_outro, 'rb') as w:
-        outro_frames.append(b'\x00' * int(8000 * 2 * 0.6))
+        outro_frames.append(b'\x00' * int(8000 * 2 * 0.8))
         outro_frames.append(w.readframes(w.getnframes()))
 
     out_rec = os.path.join(target_dir, "reception_number.wav")
