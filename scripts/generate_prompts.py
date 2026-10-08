@@ -89,11 +89,11 @@ PROMPTS = {
         "અમારો સંપર્ક કરવા બદલ આભાર. આવજો."
     ),
     "reception_number": (
-        "રિસેપ્શનનો નંબર છે: નેવું... સોળ... સિત્યોતેર... સત્તર... એકવીસ... "
+        "રિસેપ્શનનો નંબર છે: 9 0 1 6 7 7 1 7 2 1. "
         "નંબર ફરી સાંભળવા માટે 1 દબાવો, મુખ્ય મેનુમાં જવા માટે 2 દબાવો."
     ),
     "reception_number_only": (
-        "રિસેપ્શનનો નંબર છે: નેવું... સોળ... સિત્યોતેર... સત્તર... એકવીસ."
+        "રિસેપ્શનનો નંબર છે: 9 0 1 6 7 7 1 7 2 1."
     )
 }
 
@@ -149,8 +149,8 @@ def main():
         if not converted:
             logger.info(f"Synthesizing prompt '{name}' with TTS: {text[:45]}...")
             if name in ("reception_number", "reception_number_only"):
-                # Use reduced speed rate (-15%) so caller can comfortably note down the phone number
-                gen_path = tts.synthesize_gujarati(text, speed_rate="-15%", pace=0.85)
+                # Single digits at a slightly faster -10% speed rate
+                gen_path = tts.synthesize_gujarati(text, speed_rate="-10%", pace=1.0)
             else:
                 gen_path = tts.synthesize_gujarati(text)
 
