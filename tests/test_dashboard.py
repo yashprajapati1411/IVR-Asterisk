@@ -14,9 +14,40 @@ def setup_dashboard_env():
     db.seed_initial_data(reset=True)
     
     from backend.app import app
+    from backend.routes.auth import AUTH_TOKEN
     client = TestClient(app)
+    client.headers["X-Auth-Token"] = AUTH_TOKEN
     
     yield db, client
+
+def test_auth_login_and_gate_security():
+    from backend.app import app
+    unauth_client = TestClient(app)
+    
+    # 1. Unauthenticated request to /api/appointments should fail with 401
+    res_unauth = unauth_client.get("/api/appointments")
+    assert res_unauth.status_code == 401
+    
+    # 2. Login with wrong credentials should fail with 401
+    res_wrong = unauth_client.post("/api/auth/login", json={
+        "username": "trinay@2026",
+        "password": "wrongpassword"
+    })
+    assert res_wrong.status_code == 401
+    
+    # 3. Login with correct credentials should return token
+    res_login = unauth_client.post("/api/auth/login", json={
+        "username": "trinay@2026",
+        "password": "8998"
+    })
+    assert res_login.status_code == 200
+    token = res_login.json()["token"]
+    assert len(token) > 20
+    
+    # 4. Use token to access protected API
+    res_auth = unauth_client.get("/api/appointments", headers={"X-Auth-Token": token})
+    assert res_auth.status_code == 200
+    assert res_auth.json()["success"] is True
 
 def test_manual_booking_and_slot_token_ranges(setup_dashboard_env):
     db, client = setup_dashboard_env

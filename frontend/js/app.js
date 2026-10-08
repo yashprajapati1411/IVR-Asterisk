@@ -61,17 +61,74 @@ document.addEventListener('alpine:init', () => {
       is_active: 1
     },
 
-    async init() {
-      await this.loadDoctors();
-      await this.fetchAppointments();
-      await this.fetchSchedules();
+    // Authentication State
+    isAuthenticated: !!API.getToken(),
+    loginForm: {
+      username: 'trinay@2026',
+      password: '',
+      error: '',
+      loading: false
+    },
 
-      // Auto-refresh appointments every 5 seconds
+    async init() {
+      // Listen for unauthorized 401 events from API
+      window.addEventListener('auth-unauthorized', () => {
+        this.isAuthenticated = false;
+        this.loginForm.password = '';
+        this.loginForm.error = 'સત્ર સમાપ્ત થઈ ગયું છે. કૃપા કરીને ફરી લૉગિન કરો. (Session expired. Please log in again.)';
+      });
+
+      if (this.isAuthenticated) {
+        await this.loadInitialData();
+      }
+
+      // Auto-refresh appointments every 5 seconds (only when authenticated)
       setInterval(() => {
-        if (this.activeTab === 'appointments' && !this.showBookingModal) {
+        if (this.isAuthenticated && this.activeTab === 'appointments' && !this.showBookingModal) {
           this.fetchAppointments(true);
         }
       }, 5000);
+    },
+
+    async loadInitialData() {
+      await this.loadDoctors();
+      await this.fetchAppointments();
+      await this.fetchSchedules();
+    },
+
+    async submitLogin() {
+      this.loginForm.error = '';
+      if (!this.loginForm.username.trim() || !this.loginForm.password.trim()) {
+        this.loginForm.error = 'કૃપા કરીને યુઝરનેમ અને પાસવર્ડ દાખલ કરો.';
+        return;
+      }
+      this.loginForm.loading = true;
+      try {
+        const res = await API.login(this.loginForm.username, this.loginForm.password);
+        if (res.success && res.token) {
+          this.isAuthenticated = true;
+          this.loginForm.password = '';
+          this.loginForm.error = '';
+          await this.loadInitialData();
+        } else {
+          this.loginForm.error = res.detail || 'ખોટો યુઝરનેમ અથવા પાસવર્ડ (Invalid username or password)';
+        }
+      } catch (err) {
+        console.error('Login error:', err);
+        this.loginForm.error = 'સર્વર સાથે કનેક્ટ થવામાં ભૂલ થઈ. (Server connection failed)';
+      } finally {
+        this.loginForm.loading = false;
+      }
+    },
+
+    logout() {
+      API.logout();
+      this.isAuthenticated = false;
+      this.appointments = [];
+      this.doctors = [];
+      this.schedules = [];
+      this.loginForm.password = '';
+      this.loginForm.error = '';
     },
 
     async loadDoctors() {
