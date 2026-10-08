@@ -54,17 +54,20 @@ class TTSService:
         self.speed_rate = speed_rate # 1.5x speed rate
         os.makedirs(self.cache_dir, exist_ok=True)
 
-    def _get_cache_path(self, text: str) -> str:
+    def _get_cache_path(self, text: str, speed_rate: Optional[str] = None) -> str:
         # Include speed rate in hash so changes in rate invalidate old cache
-        text_hash = hashlib.md5(f"{text}_{self.speed_rate}".encode("utf-8")).hexdigest()
+        rate = speed_rate or self.speed_rate
+        text_hash = hashlib.md5(f"{text}_{rate}".encode("utf-8")).hexdigest()
         return os.path.join(self.cache_dir, f"tts_{text_hash}.wav")
 
-    def synthesize_gujarati(self, text: str) -> str:
+    def synthesize_gujarati(self, text: str, speed_rate: Optional[str] = None, pace: Optional[float] = None) -> str:
         """
-        Synthesizes Gujarati text to an 8kHz 16-bit mono WAV file at 1.5x speed.
+        Synthesizes Gujarati text to an 8kHz 16-bit mono WAV file.
         Returns the absolute filepath to the .wav file.
         """
-        cache_path = self._get_cache_path(text)
+        eff_speed = speed_rate or self.speed_rate
+        eff_pace = pace if pace is not None else 1.4
+        cache_path = self._get_cache_path(text, eff_speed)
         if os.path.exists(cache_path) and os.path.getsize(cache_path) > 1000:
             return cache_path
 
@@ -80,7 +83,7 @@ class TTSService:
                     "target_language_code": "gu-IN",
                     "speaker": "pooja",
                     "pitch": 0,
-                    "pace": 1.4,
+                    "pace": eff_pace,
                     "loudness": 1.5,
                     "speech_sample_rate": 8000,
                     "enable_preprocessing": True,
@@ -102,13 +105,13 @@ class TTSService:
             except Exception as e:
                 logger.warning(f"Sarvam TTS failed, trying edge-tts: {e}")
 
-        # 2. Try Edge-TTS (gu-IN-DhwaniNeural) with 1.5x speed
+        # 2. Try Edge-TTS (gu-IN-DhwaniNeural)
         try:
             temp_mp3 = cache_path.replace(".wav", ".mp3")
             try:
                 import edge_tts
                 import asyncio
-                communicate = edge_tts.Communicate(text, "gu-IN-DhwaniNeural", rate=self.speed_rate)
+                communicate = edge_tts.Communicate(text, "gu-IN-DhwaniNeural", rate=eff_speed)
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
@@ -124,7 +127,7 @@ class TTSService:
                 cmd_edge = [
                     sys.executable, "-m", "edge_tts",
                     "--voice", "gu-IN-DhwaniNeural",
-                    f"--rate={self.speed_rate}",
+                    f"--rate={eff_speed}",
                     "--text", text,
                     "--write-media", temp_mp3
                 ]
@@ -135,7 +138,7 @@ class TTSService:
                     if os.path.exists(temp_mp3):
                         os.remove(temp_mp3)
                     if os.path.exists(cache_path) and os.path.getsize(cache_path) > 500:
-                        logger.info(f"Synthesized Gujarati audio via Edge-TTS (1.5x) -> {cache_path}")
+                        logger.info(f"Synthesized Gujarati audio via Edge-TTS ({eff_speed}) -> {cache_path}")
                         return cache_path
         except Exception as e:
             logger.warning(f"Edge-TTS failed: {e}")
