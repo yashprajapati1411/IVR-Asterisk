@@ -341,11 +341,19 @@ class IVREngine:
         max_attempts = 3
 
         while attempts < max_attempts and not self.channel.is_hungup:
-            # Collect up to 11 digits (to swallow optional trailing #)
-            mobile = await self.channel.get_data(self._sound("gu/enter_mobile"), timeout_ms=15000, max_digits=11)
+            # Collect up to 11 digits (to swallow optional trailing # or leading 0)
+            raw_input = await self.channel.get_data(self._sound("gu/enter_mobile"), timeout_ms=15000, max_digits=11)
+            logger.info(f"Mobile capture raw DTMF input: '{raw_input}' (attempt {attempts+1})")
 
-            if mobile:
-                mobile = mobile.replace("#", "").strip()
+            mobile = raw_input or ""
+            # Strip non-digits
+            mobile = re.sub(r"\D", "", mobile).strip()
+
+            # Normalize 11-digit numbers starting with 0 (STD) or 12-digit with 91
+            if len(mobile) == 11 and mobile.startswith("0"):
+                mobile = mobile[1:]
+            elif len(mobile) == 12 and mobile.startswith("91"):
+                mobile = mobile[2:]
 
             if mobile and re.match(r"^[6-9]\d{9}$", mobile):
                 confirmed = await self._confirm_mobile_number(mobile)

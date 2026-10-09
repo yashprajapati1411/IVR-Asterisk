@@ -32,6 +32,18 @@ elif env_sounds:
 else:
     CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sounds", "cache")
 
+def ensure_alaw_file(wav_path: str):
+    """Ensures a native .alaw file exists alongside the .wav file for zero-transcoding playback."""
+    if not wav_path or not wav_path.endswith(".wav") or not os.path.exists(wav_path):
+        return
+    alaw_path = wav_path[:-4] + ".alaw"
+    if os.path.exists(alaw_path) and os.path.getsize(alaw_path) > 100:
+        return
+    ffmpeg_bin = shutil.which("ffmpeg") or (r"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe" if os.path.exists(r"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe") else None)
+    if ffmpeg_bin:
+        cmd = [ffmpeg_bin, "-y", "-i", wav_path, "-ar", "8000", "-ac", "1", "-codec:a", "pcm_alaw", "-f", "alaw", alaw_path]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 def _convert_to_asterisk_wav(input_path: str, output_wav: str) -> bool:
     """Converts any audio file to Asterisk 8000Hz 16-bit mono PCM WAV using ffmpeg or sox."""
     ffmpeg_bin = shutil.which("ffmpeg") or (r"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe" if os.path.exists(r"C:\ffmpeg-8.1-essentials_build\bin\ffmpeg.exe") else None)
@@ -40,11 +52,17 @@ def _convert_to_asterisk_wav(input_path: str, output_wav: str) -> bool:
     if ffmpeg_bin:
         cmd = [ffmpeg_bin, "-y", "-i", input_path, "-ar", "8000", "-ac", "1", "-sample_fmt", "s16", output_wav]
         res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return res.returncode == 0
+        if res.returncode == 0:
+            ensure_alaw_file(output_wav)
+            return True
+        return False
     elif sox_bin:
         cmd = [sox_bin, input_path, "-r", "8000", "-c", "1", "-b", "16", output_wav]
         res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return res.returncode == 0
+        if res.returncode == 0:
+            ensure_alaw_file(output_wav)
+            return True
+        return False
     return False
 
 class TTSService:
@@ -69,6 +87,7 @@ class TTSService:
         eff_pace = pace if pace is not None else 1.4
         cache_path = self._get_cache_path(text, eff_speed)
         if os.path.exists(cache_path) and os.path.getsize(cache_path) > 1000:
+            ensure_alaw_file(cache_path)
             return cache_path
 
         # 1. Try Sarvam TTS (bulbul:v3) if key provided and not previously failed with quota error
@@ -96,6 +115,7 @@ class TTSService:
                         raw_audio = base64.b64decode(audios[0])
                         with open(cache_path, "wb") as f:
                             f.write(raw_audio)
+                        ensure_alaw_file(cache_path)
                         logger.info(f"Synthesized Gujarati audio via Sarvam TTS (bulbul:v3) -> {cache_path}")
                         return cache_path
                 else:
@@ -145,6 +165,7 @@ class TTSService:
 
         # 3. Fallback tone
         self._generate_fallback_wav(cache_path, duration_sec=1.0)
+        ensure_alaw_file(cache_path)
         return cache_path
 
     def _generate_fallback_wav(self, output_path: str, duration_sec: float = 1.0):

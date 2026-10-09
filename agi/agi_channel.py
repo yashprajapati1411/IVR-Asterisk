@@ -71,8 +71,8 @@ class AGIChannel:
         except ValueError:
             status_code = -1
 
-        # Match result=<value>
-        match = re.search(r"result=([^\s]+)", resp)
+        # Match result=<value> (ignoring parenthetical suffixes like (timeout))
+        match = re.search(r"result=([^\s\(\)]*)", resp)
         result_val = match.group(1) if match else ""
 
         # Status 511 indicates Asterisk channel is dead/hung up.
@@ -118,7 +118,7 @@ class AGIChannel:
             filename = filename[:-4]
 
         status, result, raw = await self.send_command(f'GET DATA "{filename}" {timeout_ms} {max_digits}')
-        if result and result != "-1" and result != "timeout":
+        if result and result not in ("-1", "timeout", "(timeout)"):
             return result
         return None
 
