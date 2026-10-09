@@ -139,7 +139,8 @@ class AGIChannel:
             filename = filename[: -(len(format_type) + 1)]
 
         beep_str = "beep" if beep else ""
-        cmd = f'RECORD FILE "{filename}" {format_type} "{escape_digits}" {timeout_ms} 0 {beep_str} s={silence_sec}'
+        silence_int = int(silence_sec) if silence_sec else 3
+        cmd = f'RECORD FILE "{filename}" {format_type} "{escape_digits}" {timeout_ms} 0 {beep_str} s={silence_int}'
         status, result, _ = await self.send_command(cmd)
         return status == 200 and result != "-1"
 

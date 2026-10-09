@@ -67,13 +67,16 @@ def extract_clean_name(text: str) -> str:
     if words and all(w.isascii() for w in words):
         t = ' '.join(w.capitalize() for w in words)
         
-    # Check if text is just an intro phrase without an actual name
+    # Check if text is just an intro phrase or single-digit background noise
     intro_phrases = {
         "મારું નામ", "મારૂ નામ", "મારુ નામ", "મારું", "મારૂ", "નામ",
         "my name", "my name is", "this is", "i am", "myself",
-        "मेरा नाम", "મેરા નામ", "હું", "હૂં", "હેલો", "નમસ્તે", "hello", "hi"
+        "मेरा नाम", "મેરા નામ", "હું", "હૂં", "હેલો", "નમસ્તે", "hello", "hi",
+        "એક", "બે", "ત્રણ", "ચાર", "પાંચ", "છ", "સાત", "આઠ", "નવ", "ઝીરો", "શૂન્ય",
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "zero",
+        "yes", "no", "હા", "ના"
     }
-    if t.lower() in intro_phrases:
+    if t.lower() in intro_phrases or len(t) <= 1:
         return ""
 
     return t

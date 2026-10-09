@@ -427,7 +427,7 @@ class IVREngine:
             rec_target = os.path.join(cache_dir, rec_filename).replace("\\", "/")
             rec_full_path = f"{rec_target}.wav"
 
-            await self.channel.record_file(rec_target, format_type="wav", escape_digits="#", timeout_ms=4500, beep=True, silence_sec=1.5)
+            await self.channel.record_file(rec_target, format_type="wav", escape_digits="#", timeout_ms=6000, beep=True, silence_sec=3)
 
             # Search across all possible cache directories to guarantee locating the audio file
             audio_to_transcribe = rec_full_path
@@ -459,8 +459,10 @@ class IVREngine:
                 attempts += 1
                 prompt_type = "unheard"
                 if attempts >= max_attempts:
-                    recognized_name = "દર્દી"
-                    break
+                    logger.info("Name capture reached max attempts -> defaulting to 'દર્દી' and continuing to final confirmation")
+                    self.session.patient_name_gu = "દર્દી"
+                    self.session.state = "FINAL_CONFIRMATION"
+                    return
                 continue
 
             confirm_text = f"તમારું નામ {recognized_name} છે. સાચું હોય તો 1 દબાવો. ફરીથી કહેવા માટે 2 દબાવો."
@@ -484,8 +486,9 @@ class IVREngine:
                 if attempts < max_attempts:
                     await self.channel.stream_file(self._sound("gu/invalid_option"))
 
-        await self.channel.stream_file(self._sound("gu/timeout_disconnect"))
-        self.session.state = "HANGUP"
+        # Fallback if loop ended without explicit confirm
+        self.session.patient_name_gu = "દર્દી"
+        self.session.state = "FINAL_CONFIRMATION"
 
     # -------------------------------------------------------------------------
     # 6. STREAMLINED FINAL CONFIRMATION
