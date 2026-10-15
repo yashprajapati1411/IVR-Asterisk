@@ -11,8 +11,8 @@ export PYTHONPATH=/app
 python3 /app/scripts/seed_db.py
 
 # 2. Start Python FastAGI Server & FastAPI Dashboard Server in background
-echo "Starting FastAGI Server on 0.0.0.0:4573..."
-python3 /app/agi/server.py --host 0.0.0.0 --port 4573 &
+echo "Starting FastAGI Server on 127.0.0.1:4573..."
+python3 /app/agi/server.py --host 127.0.0.1 --port 4573 &
 FASTAGI_PID=$!
 
 echo "Starting Receptionist Dashboard Web Server on 0.0.0.0:8000..."
