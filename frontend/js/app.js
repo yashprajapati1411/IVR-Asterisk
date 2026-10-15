@@ -7,7 +7,10 @@ document.addEventListener('alpine:init', () => {
     activeTab: 'appointments',
     
     // Filters & States
-    doctors: [],
+    doctors: [
+      { id: 1, name_en: 'Dr. Shaishav Soni', name_gu: 'ડૉક્ટર શૈશવ સોની' },
+      { id: 2, name_en: 'Dr. Jaydeep Patel', name_gu: 'ડૉક્ટર જયદીપ પટેલ' }
+    ],
     selectedDoctorId: '',
     selectedDate: new Date().toLocaleDateString('en-CA'),
     selectedShift: '', // '' for All, 'MORNING', 'EVENING'

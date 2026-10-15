@@ -11,9 +11,9 @@
   <!-- AlpineJS CDN -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=2.1">
-  <script src="js/api.js?v=2.1"></script>
-  <script src="js/app.js?v=2.1"></script>
+  <link rel="stylesheet" href="css/styles.css?v=2.2">
+  <script src="js/api.js?v=2.2"></script>
+  <script src="js/app.js?v=2.2"></script>
 </head>
 <body class="h-full antialiased text-slate-800" x-data="dashboard">
 
@@ -283,9 +283,8 @@
               @change="fetchAppointments()"
               class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
               <option value="">બધા ડૉક્ટર (All Doctors)</option>
-              <template x-for="doc in doctors" :key="doc.id">
-                <option :value="doc.id" x-text="doc.name_gu + ' (' + doc.name_en + ')'"></option>
-              </template>
+              <option value="1">ડૉક્ટર શૈશવ સોની (Dr. Shaishav Soni)</option>
+              <option value="2">ડૉક્ટર જયદીપ પટેલ (Dr. Jaydeep Patel)</option>
             </select>
           </div>
 
@@ -464,12 +463,11 @@
           <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
             <i class="fa-solid fa-user-doctor text-sky-600 text-sm"></i>
             <select 
-              x-model="scheduleDoctorId" 
+              x-model.number="scheduleDoctorId" 
               @change="fetchSchedules()"
               class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
-              <template x-for="doc in doctors" :key="doc.id">
-                <option :value="doc.id" x-text="doc.name_gu + ' (' + doc.name_en + ')'"></option>
-              </template>
+              <option :value="1">ડૉક્ટર શૈશવ સોની (Dr. Shaishav Soni)</option>
+              <option :value="2">ડૉક્ટર જયદીપ પટેલ (Dr. Jaydeep Patel)</option>
             </select>
           </div>
 
@@ -654,10 +652,9 @@
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">ડૉક્ટર (Doctor)</label>
-          <select x-model="manualBook.doctor_id" @change="loadSlotsForManualBooking()" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
-            <template x-for="doc in doctors" :key="doc.id">
-              <option :value="doc.id" x-text="doc.name_gu"></option>
-            </template>
+          <select x-model.number="manualBook.doctor_id" @change="loadSlotsForManualBooking()" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+            <option :value="1">ડૉક્ટર શૈશવ સોની (Dr. Shaishav Soni)</option>
+            <option :value="2">ડૉક્ટર જયદીપ પટેલ (Dr. Jaydeep Patel)</option>
           </select>
         </div>
 
