@@ -3,6 +3,10 @@ set -e
 
 echo "=== Starting Asterisk Gujarati IVR System ==="
 
+# 0. Ensure working directory is /app
+cd /app
+export PYTHONPATH=/app
+
 # 1. Initialize DB and seed tables if not already done
 python3 /app/scripts/seed_db.py
 

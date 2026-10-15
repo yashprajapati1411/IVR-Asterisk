@@ -118,3 +118,89 @@ def test_slots_exhaustion_concurrency(test_db):
     r3 = test_db.book_appointment(2, "9800000003", "દર્દી ૩", slot_time_gu="સવારે 10:00 થી 11:00", current_time="08:00")
     assert r3["success"] is False
     assert r3["error"] == "SLOTS_FULL"
+
+def test_cross_shift_collision_prevention(test_db):
+    today = datetime.date.today().isoformat()
+    # Save a morning slot 10:00 to 11:00
+    res1 = test_db.save_or_update_slot(
+        doctor_id=1,
+        schedule_date=today,
+        start_time="10:00",
+        end_time="11:00",
+        slot_time_gu="સવારે 10:00 થી 11:00",
+        slot_time_en="10:00 AM to 11:00 AM",
+        max_slots=5,
+        shift="MORNING"
+    )
+    assert res1["success"] is True
+
+    # Attempting to save overlapping slot in evening (e.g. 10:30 to 11:30) must be rejected
+    res2 = test_db.save_or_update_slot(
+        doctor_id=1,
+        schedule_date=today,
+        start_time="10:30",
+        end_time="11:30",
+        slot_time_gu="સવારે 10:30 થી 11:30",
+        slot_time_en="10:30 AM to 11:30 AM",
+        max_slots=5,
+        shift="EVENING"
+    )
+    assert res2["success"] is False
+    assert "ઓવરલેપ" in res2["error"]
+
+def test_independent_token_numbering_shifts(test_db):
+    today = datetime.date.today().isoformat()
+    # Save morning slot for doc 1
+    test_db.save_or_update_slot(
+        doctor_id=1,
+        schedule_date=today,
+        start_time="10:00",
+        end_time="11:00",
+        slot_time_gu="સવારે 10:00 થી 11:00",
+        slot_time_en="10:00 AM to 11:00 AM",
+        max_slots=5,
+        shift="MORNING"
+    )
+    # Book 1 morning appointment
+    m1 = test_db.book_appointment(
+        doctor_id=1,
+        mobile_number="9825000001",
+        patient_name_gu="સવાર દર્દી ૧",
+        target_date=today,
+        slot_time_gu="સવારે 10:00 થી 11:00",
+        current_time="08:00"
+    )
+    assert m1["success"] is True
+    assert m1["appointment_code"] == "APT-M1"
+    assert m1["token_number"] == 1
+
+    # Book 1 evening appointment (5 PM to 6 PM) from doctor 1 default slots
+    e1 = test_db.book_appointment(
+        doctor_id=1,
+        mobile_number="9825000002",
+        patient_name_gu="સાંજ દર્દી ૧",
+        target_date=today,
+        slot_time_gu="સાંજે 5:00 થી 6:00",
+        current_time="08:00"
+    )
+    assert e1["success"] is True
+    assert e1["appointment_code"] == "APT-E1"
+    assert e1["token_number"] == 1
+
+def test_delete_slot(test_db):
+    today = datetime.date.today().isoformat()
+    res = test_db.save_or_update_slot(
+        doctor_id=1,
+        schedule_date=today,
+        start_time="13:00",
+        end_time="14:00",
+        slot_time_gu="બપોરે 1:00 થી 2:00",
+        slot_time_en="1:00 PM to 2:00 PM",
+        max_slots=5,
+        shift="MORNING"
+    )
+    slot_id = res["slot_id"]
+    # Deleting unused slot should succeed
+    del_res = test_db.delete_slot(slot_id)
+    assert del_res["success"] is True
+

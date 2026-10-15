@@ -1,5 +1,6 @@
 /**
  * Receptionist Dashboard Application Logic.
+ * Trinay Orthopedic Hospital — Receptionist Portal
  */
 document.addEventListener('alpine:init', () => {
   Alpine.data('dashboard', () => ({
@@ -9,6 +10,7 @@ document.addEventListener('alpine:init', () => {
     doctors: [],
     selectedDoctorId: '',
     selectedDate: new Date().toLocaleDateString('en-CA'),
+    selectedShift: '', // '' for All, 'MORNING', 'EVENING'
     searchQuery: '',
 
     get isTodaySelected() {
@@ -28,10 +30,16 @@ document.addEventListener('alpine:init', () => {
     // Appointments Data
     appointments: [],
     loadingAppts: false,
-    stats: { total: 0, ivr: 0, manual: 0, confirmed: 0 },
+    stats: { total: 0, ivr: 0, manual: 0, confirmed: 0, morning: 0, evening: 0 },
+
+    get filteredAppointments() {
+      if (!this.selectedShift) return this.appointments;
+      return this.appointments.filter(a => (a.shift || 'MORNING') === this.selectedShift);
+    },
     
     // Manual Booking Modal
     showBookingModal: false,
+    manualBookShift: 'ALL',
     manualBook: {
       doctor_id: 1,
       patient_name_gu: '',
@@ -41,25 +49,79 @@ document.addEventListener('alpine:init', () => {
     },
     availableSlotsForManual: [],
 
+    get filteredAvailableSlotsForManual() {
+      if (this.manualBookShift === 'ALL') return this.availableSlotsForManual;
+      return this.availableSlotsForManual.filter(s => (s.shift || 'MORNING') === this.manualBookShift);
+    },
+
     // Schedule Manager State
     scheduleDate: new Date().toISOString().split('T')[0],
     scheduleDoctorId: 1,
+    scheduleShift: 'ALL', // 'ALL', 'MORNING', 'EVENING'
     schedules: [],
     loadingSchedules: false,
 
-    // Custom Slot Modal
+    get filteredSchedules() {
+      if (this.scheduleShift === 'ALL') return this.schedules;
+      return this.schedules.filter(s => (s.shift || 'MORNING') === this.scheduleShift);
+    },
+
+    get morningSlots() {
+      return this.schedules.filter(s => (s.shift || 'MORNING') === 'MORNING');
+    },
+
+    get eveningSlots() {
+      return this.schedules.filter(s => (s.shift || 'MORNING') === 'EVENING');
+    },
+
+    get morningCapacity() {
+      return this.morningSlots.reduce((sum, s) => sum + (s.max_slots || 0), 0);
+    },
+
+    get morningBooked() {
+      return this.morningSlots.reduce((sum, s) => sum + (s.booked_count || 0), 0);
+    },
+
+    get eveningCapacity() {
+      return this.eveningSlots.reduce((sum, s) => sum + (s.max_slots || 0), 0);
+    },
+
+    get eveningBooked() {
+      return this.eveningSlots.reduce((sum, s) => sum + (s.booked_count || 0), 0);
+    },
+
+    // Custom 1-Hour Slot Modal
     showSlotModal: false,
+    slotModalError: '',
     customSlot: {
       slot_id: null,
       doctor_id: 1,
       schedule_date: new Date().toISOString().split('T')[0],
-      start_time: '14:00',
-      end_time: '15:00',
-      slot_time_gu: 'બપોરે 2:00 થી 3:00',
-      slot_time_en: '2:00 PM to 3:00 PM',
-      max_slots: 8,
+      shift: 'MORNING',
+      start_time: '10:00',
+      end_time: '11:00',
+      slot_time_gu: 'સવારે 10:00 થી 11:00',
+      slot_time_en: '10:00 AM to 11:00 AM',
+      max_slots: 5,
       is_active: 1
     },
+
+    morningPresets: [
+      { start: '10:00', end: '11:00', gu: 'સવારે 10:00 થી 11:00', en: '10:00 AM to 11:00 AM' },
+      { start: '11:00', end: '12:00', gu: 'સવારે 11:00 થી 12:00', en: '11:00 AM to 12:00 PM' },
+      { start: '12:00', end: '13:00', gu: 'બપોરે 12:00 થી 1:00', en: '12:00 PM to 1:00 PM' },
+      { start: '13:00', end: '14:00', gu: 'બપોરે 1:00 થી 2:00', en: '1:00 PM to 2:00 PM' },
+      { start: '14:00', end: '15:00', gu: 'બપોરે 2:00 થી 3:00', en: '2:00 PM to 3:00 PM' },
+      { start: '15:00', end: '16:00', gu: 'બપોરે 3:00 થી 4:00', en: '3:00 PM to 4:00 PM' }
+    ],
+
+    eveningPresets: [
+      { start: '16:00', end: '17:00', gu: 'સાંજે 4:00 થી 5:00', en: '4:00 PM to 5:00 PM' },
+      { start: '17:00', end: '18:00', gu: 'સાંજે 5:00 થી 6:00', en: '5:00 PM to 6:00 PM' },
+      { start: '18:00', end: '19:00', gu: 'સાંજે 6:00 થી 7:00', en: '6:00 PM to 7:00 PM' },
+      { start: '19:00', end: '20:00', gu: 'સાંજે 7:00 થી 8:00', en: '7:00 PM to 8:00 PM' },
+      { start: '20:00', end: '21:00', gu: 'રાત્રે 8:00 થી 9:00', en: '8:00 PM to 9:00 PM' }
+    ],
 
     // Authentication State
     isAuthenticated: !!API.getToken(),
@@ -84,7 +146,7 @@ document.addEventListener('alpine:init', () => {
 
       // Auto-refresh appointments every 5 seconds (only when authenticated)
       setInterval(() => {
-        if (this.isAuthenticated && this.activeTab === 'appointments' && !this.showBookingModal) {
+        if (this.isAuthenticated && this.activeTab === 'appointments' && !this.showBookingModal && !this.showSlotModal) {
           this.fetchAppointments(true);
         }
       }, 5000);
@@ -163,6 +225,8 @@ document.addEventListener('alpine:init', () => {
 
     calculateStats() {
       this.stats.total = this.appointments.length;
+      this.stats.morning = this.appointments.filter(a => (a.shift || 'MORNING') === 'MORNING').length;
+      this.stats.evening = this.appointments.filter(a => a.shift === 'EVENING').length;
       this.stats.ivr = this.appointments.filter(a => a.source === 'IVR').length;
       this.stats.manual = this.appointments.filter(a => a.source === 'MANUAL').length;
       this.stats.confirmed = this.appointments.filter(a => a.status === 'CONFIRMED').length;
@@ -244,6 +308,7 @@ document.addEventListener('alpine:init', () => {
           slot_id: slot.id,
           doctor_id: slot.doctor_id,
           schedule_date: this.scheduleDate,
+          shift: slot.shift || 'MORNING',
           start_time: slot.start_time,
           end_time: slot.end_time,
           slot_time_gu: slot.slot_time_gu,
@@ -266,6 +331,7 @@ document.addEventListener('alpine:init', () => {
           slot_id: slot.id,
           doctor_id: slot.doctor_id,
           schedule_date: this.scheduleDate,
+          shift: slot.shift || 'MORNING',
           start_time: slot.start_time,
           end_time: slot.end_time,
           slot_time_gu: slot.slot_time_gu,
@@ -278,6 +344,20 @@ document.addEventListener('alpine:init', () => {
         }
       } catch (err) {
         alert('Failed to toggle slot: ' + err.message);
+      }
+    },
+
+    async deleteSlot(slot) {
+      if (!confirm(`શું તમે આ સ્લોટ (${slot.slot_time_gu}) ડિલીટ કરવા માંગો છો?`)) return;
+      try {
+        const res = await API.deleteSlot(slot.id);
+        if (res.success) {
+          await this.fetchSchedules();
+        } else {
+          alert(res.detail || res.error || 'સ્લોટ ડિલીટ કરી શકાયો નથી.');
+        }
+      } catch (err) {
+        alert('ભૂલ: ' + err.message);
       }
     },
 
@@ -313,31 +393,73 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    openCustomSlotModal() {
+    setShift(shift) {
+      this.customSlot.shift = shift;
+      this.slotModalError = '';
+      if (shift === 'MORNING') {
+        this.applyPreset(this.morningPresets[0]);
+      } else {
+        this.applyPreset(this.eveningPresets[0]);
+      }
+    },
+
+    applyPreset(preset) {
+      this.customSlot.start_time = preset.start;
+      this.customSlot.end_time = preset.end;
+      this.customSlot.slot_time_gu = preset.gu;
+      this.customSlot.slot_time_en = preset.en;
+      this.slotModalError = '';
+    },
+
+    openCustomSlotModal(defaultShift = null) {
+      const shift = defaultShift || (this.scheduleShift === 'EVENING' ? 'EVENING' : 'MORNING');
       this.customSlot = {
         slot_id: null,
         doctor_id: this.scheduleDoctorId,
         schedule_date: this.scheduleDate,
-        start_time: '14:00',
-        end_time: '15:00',
-        slot_time_gu: 'બપોરે 2:00 થી 3:00',
-        slot_time_en: '2:00 PM to 3:00 PM',
-        max_slots: 8,
+        shift: shift,
+        start_time: shift === 'MORNING' ? '10:00' : '17:00',
+        end_time: shift === 'MORNING' ? '11:00' : '18:00',
+        slot_time_gu: shift === 'MORNING' ? 'સવારે 10:00 થી 11:00' : 'સાંજે 5:00 થી 6:00',
+        slot_time_en: shift === 'MORNING' ? '10:00 AM to 11:00 AM' : '5:00 PM to 6:00 PM',
+        max_slots: 5,
         is_active: 1
       };
-      this.updateCustomSlotLabels();
+      this.slotModalError = '';
       this.showSlotModal = true;
     },
 
+    checkClientSideConflict() {
+      const start = this.customSlot.start_time;
+      const end = this.customSlot.end_time;
+      for (const s of this.schedules) {
+        if (this.customSlot.slot_id && s.id === this.customSlot.slot_id) continue;
+        if (start < s.end_time && end > s.start_time) {
+          const shiftLabel = s.shift === 'MORNING' ? 'સવારના (Morning)' : 'સાંજના (Evening)';
+          return `આ સમય સ્લોટ પહેલેથી ${shiftLabel} સ્લોટમાં શેડ્યૂલ કરેલ સમય (${s.slot_time_gu}) સાથે ઓવરલેપ થાય છે!`;
+        }
+      }
+      return null;
+    },
+
     async submitCustomSlot() {
+      this.slotModalError = '';
+      const conflictMsg = this.checkClientSideConflict();
+      if (conflictMsg) {
+        this.slotModalError = conflictMsg;
+        return;
+      }
+
       try {
         const res = await API.saveSlot(this.customSlot);
         if (res.success) {
           this.showSlotModal = false;
           await this.fetchSchedules();
+        } else {
+          this.slotModalError = res.detail || res.error || 'સ્લોટ સાચવવામાં નિષ્ફળતા મળી.';
         }
       } catch (err) {
-        alert('Failed to add custom slot: ' + err.message);
+        this.slotModalError = 'ભૂલ: ' + err.message;
       }
     }
   }));

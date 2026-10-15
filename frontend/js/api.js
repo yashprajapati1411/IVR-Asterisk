@@ -53,11 +53,12 @@ const API = {
     return res.json();
   },
 
-  async getAppointments(date = '', doctorId = '', search = '') {
+  async getAppointments(date = '', doctorId = '', search = '', shift = '') {
     const params = [];
     if (date && String(date).trim()) params.push(`date=${encodeURIComponent(String(date).trim())}`);
     if (doctorId) params.push(`doctor_id=${encodeURIComponent(doctorId)}`);
     if (search && String(search).trim()) params.push(`search=${encodeURIComponent(String(search).trim())}`);
+    if (shift && String(shift).trim()) params.push(`shift=${encodeURIComponent(String(shift).trim())}`);
     let url = '/api/appointments' + (params.length ? `?${params.join('&')}` : '');
     const res = await this.fetchWithAuth(url);
     return res.json();
@@ -81,8 +82,10 @@ const API = {
     return res.json();
   },
 
-  async getSchedules(doctorId, date) {
-    const res = await this.fetchWithAuth(`/api/schedules?doctor_id=${doctorId}&date=${date}`);
+  async getSchedules(doctorId, date, shift = '') {
+    let url = `/api/schedules?doctor_id=${doctorId}&date=${date}`;
+    if (shift) url += `&shift=${encodeURIComponent(shift)}`;
+    const res = await this.fetchWithAuth(url);
     return res.json();
   },
 
@@ -91,6 +94,13 @@ const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(slotData)
+    });
+    return res.json();
+  },
+
+  async deleteSlot(slotId) {
+    const res = await this.fetchWithAuth(`/api/schedules/slot/${slotId}`, {
+      method: 'DELETE'
     });
     return res.json();
   }

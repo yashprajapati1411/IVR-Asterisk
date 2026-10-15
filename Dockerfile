@@ -31,6 +31,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Copy application source code
 COPY agi/ /app/agi/
 COPY services/ /app/services/
+COPY backend/ /app/backend/
 COPY models/ /app/models/
 COPY scripts/ /app/scripts/
 COPY sounds/ /app/sounds/

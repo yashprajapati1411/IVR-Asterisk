@@ -13,13 +13,15 @@ db = DatabaseService()
 def list_appointments(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
     doctor_id: Optional[int] = Query(None, description="Filter by doctor ID"),
-    search: Optional[str] = Query(None, description="Search by name, mobile, or token")
+    search: Optional[str] = Query(None, description="Search by name, mobile, or token"),
+    shift: Optional[str] = Query(None, description="Filter by shift: MORNING or EVENING")
 ):
     """Fetches real-time appointments list with search and filters."""
     try:
         clean_date = date.strip() if date and date.strip() else None
         clean_search = search.strip() if search and search.strip() else None
-        appts = db.get_appointments_list(date_str=clean_date, doctor_id=doctor_id, search_query=clean_search)
+        clean_shift = shift.strip() if shift and shift.strip() else None
+        appts = db.get_appointments_list(date_str=clean_date, doctor_id=doctor_id, search_query=clean_search, shift=clean_shift)
         return {"success": True, "count": len(appts), "appointments": appts}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

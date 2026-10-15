@@ -90,42 +90,7 @@ class TTSService:
             ensure_alaw_file(cache_path)
             return cache_path
 
-        # 1. Try Sarvam TTS (bulbul:v3) if key provided and not previously failed with quota error
-        if self.api_key and not self.api_key.startswith("mock") and len(self.api_key) > 5 and getattr(self, "_sarvam_active", True):
-            try:
-                headers = {
-                    "api-subscription-key": self.api_key,
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "inputs": [text],
-                    "target_language_code": "gu-IN",
-                    "speaker": "pooja",
-                    "pitch": 0,
-                    "pace": eff_pace,
-                    "loudness": 1.5,
-                    "speech_sample_rate": 8000,
-                    "enable_preprocessing": True,
-                    "model": "bulbul:v3"
-                }
-                res = requests.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=5.0)
-                if res.status_code == 200:
-                    audios = res.json().get("audios", [])
-                    if audios:
-                        raw_audio = base64.b64decode(audios[0])
-                        with open(cache_path, "wb") as f:
-                            f.write(raw_audio)
-                        ensure_alaw_file(cache_path)
-                        logger.info(f"Synthesized Gujarati audio via Sarvam TTS (bulbul:v3) -> {cache_path}")
-                        return cache_path
-                else:
-                    if res.status_code in (401, 402, 403):
-                        self._sarvam_active = False
-                    logger.warning(f"Sarvam TTS returned status {res.status_code}: {res.text}")
-            except Exception as e:
-                logger.warning(f"Sarvam TTS failed, trying edge-tts: {e}")
-
-        # 2. Try Edge-TTS (gu-IN-DhwaniNeural)
+        # 1. Try Edge-TTS (gu-IN-DhwaniNeural) first to match welcome_menu.wav speaker
         try:
             temp_mp3 = cache_path.replace(".wav", ".mp3")
             try:
@@ -161,7 +126,42 @@ class TTSService:
                         logger.info(f"Synthesized Gujarati audio via Edge-TTS ({eff_speed}) -> {cache_path}")
                         return cache_path
         except Exception as e:
-            logger.warning(f"Edge-TTS failed: {e}")
+            logger.warning(f"Edge-TTS failed, trying Sarvam TTS: {e}")
+
+        # 2. Try Sarvam TTS (bulbul:v3) as high-quality fallback
+        if self.api_key and not self.api_key.startswith("mock") and len(self.api_key) > 5 and getattr(self, "_sarvam_active", True):
+            try:
+                headers = {
+                    "api-subscription-key": self.api_key,
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "inputs": [text],
+                    "target_language_code": "gu-IN",
+                    "speaker": "pooja",
+                    "pitch": 0,
+                    "pace": eff_pace,
+                    "loudness": 1.5,
+                    "speech_sample_rate": 8000,
+                    "enable_preprocessing": True,
+                    "model": "bulbul:v3"
+                }
+                res = requests.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=5.0)
+                if res.status_code == 200:
+                    audios = res.json().get("audios", [])
+                    if audios:
+                        raw_audio = base64.b64decode(audios[0])
+                        with open(cache_path, "wb") as f:
+                            f.write(raw_audio)
+                        ensure_alaw_file(cache_path)
+                        logger.info(f"Synthesized Gujarati audio via Sarvam TTS (bulbul:v3) -> {cache_path}")
+                        return cache_path
+                else:
+                    if res.status_code in (401, 402, 403):
+                        self._sarvam_active = False
+                    logger.warning(f"Sarvam TTS returned status {res.status_code}: {res.text}")
+            except Exception as e:
+                logger.warning(f"Sarvam TTS fallback failed: {e}")
 
         # 3. Fallback tone
         self._generate_fallback_wav(cache_path, duration_sec=1.0)

@@ -18,6 +18,7 @@ class SlotSaveRequest(BaseModel):
     slot_id: Optional[int] = None
     doctor_id: int
     schedule_date: str # 'YYYY-MM-DD' or 'DEFAULT'
+    shift: Optional[str] = None # 'MORNING' or 'EVENING'
     start_time: str # '10:00'
     end_time: str # '11:00'
     slot_time_gu: str # 'સવારે 10:00 થી 11:00'

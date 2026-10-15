@@ -72,7 +72,36 @@ def is_slot_expired(end_time: str, filter_time: str, start_time: Optional[str] =
     norm_filter = normalize_time_str(filter_time)
     return norm_end <= norm_filter
 
+def merge_schedules(all_found: list, target_date: str) -> list:
+    """
+    Merges date-specific schedules with day_of_week default schedules.
+    Date-specific schedules override any default schedules that overlap in time.
+    """
+    date_specific = [s for s in all_found if s["schedule_date"] == target_date]
+    defaults = [s for s in all_found if (s["schedule_date"] == "DEFAULT" or s["schedule_date"] is None)]
+    
+    if not date_specific:
+        return defaults
+    
+    merged = list(date_specific)
+    for ds in defaults:
+        ds_start = normalize_time_str(ds["start_time"], is_end_time=False)
+        ds_end = normalize_time_str(ds["end_time"], is_end_time=True, start_time=ds_start)
+        overlaps = False
+        for spec in date_specific:
+            spec_start = normalize_time_str(spec["start_time"], is_end_time=False)
+            spec_end = normalize_time_str(spec["end_time"], is_end_time=True, start_time=spec_start)
+            if spec_start < ds_end and spec_end > ds_start:
+                overlaps = True
+                break
+        if not overlaps:
+            merged.append(ds)
+            
+    merged.sort(key=lambda s: normalize_time_str(s["start_time"], is_end_time=False))
+    return merged
+
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ivr_appointments.db")
+
 
 class DatabaseService:
     def __init__(self, db_path: str = DEFAULT_DB_PATH):
@@ -105,6 +134,7 @@ class DatabaseService:
             doctor_id INTEGER NOT NULL,
             day_of_week INTEGER NOT NULL, -- 0=Mon, 6=Sun
             schedule_date TEXT DEFAULT 'DEFAULT', -- 'YYYY-MM-DD' or 'DEFAULT'
+            shift TEXT DEFAULT 'MORNING', -- 'MORNING' or 'EVENING'
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
             slot_time_gu TEXT NOT NULL,
@@ -126,6 +156,7 @@ class DatabaseService:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             appointment_code TEXT NOT NULL,
             token_number INTEGER DEFAULT 1,
+            shift TEXT DEFAULT 'MORNING', -- 'MORNING' or 'EVENING'
             doctor_id INTEGER NOT NULL,
             patient_id INTEGER NOT NULL,
             appointment_date TEXT NOT NULL, -- YYYY-MM-DD
@@ -143,6 +174,9 @@ class DatabaseService:
         cols = [r["name"] for r in cursor.fetchall()]
         if "schedule_date" not in cols:
             cursor.execute("ALTER TABLE doctor_schedules ADD COLUMN schedule_date TEXT DEFAULT 'DEFAULT'")
+        if "shift" not in cols:
+            cursor.execute("ALTER TABLE doctor_schedules ADD COLUMN shift TEXT DEFAULT 'MORNING'")
+            cursor.execute("UPDATE doctor_schedules SET shift = CASE WHEN start_time >= '16:00' THEN 'EVENING' ELSE 'MORNING' END")
 
         cursor.execute("PRAGMA table_info(appointments)")
         app_cols = [r["name"] for r in cursor.fetchall()]
@@ -150,6 +184,9 @@ class DatabaseService:
             cursor.execute("ALTER TABLE appointments ADD COLUMN token_number INTEGER DEFAULT 1")
         if "source" not in app_cols:
             cursor.execute("ALTER TABLE appointments ADD COLUMN source TEXT DEFAULT 'IVR'")
+        if "shift" not in app_cols:
+            cursor.execute("ALTER TABLE appointments ADD COLUMN shift TEXT DEFAULT 'MORNING'")
+            cursor.execute("UPDATE appointments SET shift = CASE WHEN slot_time LIKE '%સાંજે%' OR slot_time LIKE '%રાત્રે%' THEN 'EVENING' ELSE 'MORNING' END")
 
         # Remove implicit unique constraint on appointment_code if table was created with UNIQUE
         cursor.execute("PRAGMA index_list(appointments)")
@@ -190,11 +227,19 @@ class DatabaseService:
     def recalculate_and_sync_all_tokens(self):
         """
         Recalculates token_number and appointment_code for all appointments 
-        grouped by (appointment_date, doctor_id) and slot sequence.
-        Fixes legacy APT-100X codes and aligns all tokens.
+        grouped by (appointment_date, doctor_id, shift) and slot sequence.
+        Morning appointments: Token 1..20 (APT-M1..APT-M20)
+        Evening appointments: Token 1..20 (APT-E1..APT-E20)
         """
         conn = self.get_connection()
         cursor = conn.cursor()
+
+        # Update any missing shift values in appointments
+        cursor.execute("""
+            UPDATE appointments 
+            SET shift = CASE WHEN slot_time LIKE '%સાંજે%' OR slot_time LIKE '%રાત્રે%' THEN 'EVENING' ELSE 'MORNING' END
+            WHERE shift IS NULL OR shift = ''
+        """)
 
         # Get all distinct (appointment_date, doctor_id) pairs
         cursor.execute("SELECT DISTINCT appointment_date, doctor_id FROM appointments")
@@ -205,25 +250,32 @@ class DatabaseService:
             doctor_id = p["doctor_id"]
             schedules = self.get_schedules_for_date(doctor_id, date_str)
 
-            for sch in schedules:
-                slot_time_gu = sch["slot_time_gu"]
-                start_token = sch["start_token"]
-                
-                cursor.execute("""
-                    SELECT id FROM appointments 
-                    WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
-                    ORDER BY id ASC
-                """, (doctor_id, date_str, slot_time_gu))
-                appts = cursor.fetchall()
+            for shift_name in ("MORNING", "EVENING"):
+                shift_schedules = [s for s in schedules if s.get("shift") == shift_name]
+                start_token = 1
+                prefix = "M" if shift_name == "MORNING" else "E"
 
-                for idx, app in enumerate(appts):
-                    token_num = start_token + idx
-                    code = f"APT-{token_num}"
+                for sch in shift_schedules:
+                    slot_time_gu = sch["slot_time_gu"]
+                    max_slots = sch["max_slots"]
+                    
                     cursor.execute("""
-                        UPDATE appointments 
-                        SET token_number = ?, appointment_code = ? 
-                        WHERE id = ?
-                    """, (token_num, code, app["id"]))
+                        SELECT id FROM appointments 
+                        WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
+                        ORDER BY id ASC
+                    """, (doctor_id, date_str, slot_time_gu))
+                    appts = cursor.fetchall()
+
+                    for idx, app in enumerate(appts):
+                        token_num = start_token + idx
+                        code = f"APT-{prefix}{token_num}"
+                        cursor.execute("""
+                            UPDATE appointments 
+                            SET token_number = ?, appointment_code = ?, shift = ?
+                            WHERE id = ?
+                        """, (token_num, code, shift_name, app["id"]))
+
+                    start_token += max_slots
 
         conn.commit()
         conn.close()
@@ -258,20 +310,20 @@ class DatabaseService:
             schedules = []
             for day in range(7):
                 # Dr. Shaishav Soni (Doctor 1): 3 hourly slots (5 PM-6 PM, 6 PM-7 PM, 7 PM-8 PM), max 8 each
-                schedules.append((1, day, "17:00", "18:00", "સાંજે 5:00 થી 6:00", "5:00 PM to 6:00 PM", 8, 1))
-                schedules.append((1, day, "18:00", "19:00", "સાંજે 6:00 થી 7:00", "6:00 PM to 7:00 PM", 8, 1))
-                schedules.append((1, day, "19:00", "20:00", "સાંજે 7:00 થી 8:00", "7:00 PM to 8:00 PM", 8, 1))
+                schedules.append((1, day, "17:00", "18:00", "સાંજે 5:00 થી 6:00", "5:00 PM to 6:00 PM", 8, 1, "EVENING"))
+                schedules.append((1, day, "18:00", "19:00", "સાંજે 6:00 થી 7:00", "6:00 PM to 7:00 PM", 8, 1, "EVENING"))
+                schedules.append((1, day, "19:00", "20:00", "સાંજે 7:00 થી 8:00", "7:00 PM to 8:00 PM", 8, 1, "EVENING"))
 
                 # Dr. Jaydeep Patel (Doctor 2): 4 hourly slots (10 AM-11 AM, 11 AM-12 PM, 12 PM-1 PM, 1 PM-2 PM), max 8 each
-                schedules.append((2, day, "10:00", "11:00", "સવારે 10:00 થી 11:00", "10:00 AM to 11:00 AM", 8, 1))
-                schedules.append((2, day, "11:00", "12:00", "સવારે 11:00 થી 12:00", "11:00 AM to 12:00 PM", 8, 1))
-                schedules.append((2, day, "12:00", "13:00", "બપોરે 12:00 થી 1:00", "12:00 PM to 1:00 PM", 8, 1))
-                schedules.append((2, day, "13:00", "14:00", "બપોરે 1:00 થી 2:00", "1:00 PM to 2:00 PM", 8, 1))
+                schedules.append((2, day, "10:00", "11:00", "સવારે 10:00 થી 11:00", "10:00 AM to 11:00 AM", 8, 1, "MORNING"))
+                schedules.append((2, day, "11:00", "12:00", "સવારે 11:00 થી 12:00", "11:00 AM to 12:00 PM", 8, 1, "MORNING"))
+                schedules.append((2, day, "12:00", "13:00", "બપોરે 12:00 થી 1:00", "12:00 PM to 1:00 PM", 8, 1, "MORNING"))
+                schedules.append((2, day, "13:00", "14:00", "બપોરે 1:00 થી 2:00", "1:00 PM to 2:00 PM", 8, 1, "MORNING"))
                 
             cursor.executemany(
                 """INSERT INTO doctor_schedules 
-                   (doctor_id, day_of_week, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (doctor_id, day_of_week, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, shift) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 schedules
             )
         conn.close()
@@ -317,9 +369,8 @@ class DatabaseService:
         """, (doctor_id, target_date, day_of_week))
         all_found = cursor.fetchall()
         
-        # Prefer specific date schedules if present
-        date_specific = [s for s in all_found if s["schedule_date"] == target_date]
-        schedules = date_specific if date_specific else [s for s in all_found if (s["schedule_date"] == "DEFAULT" or s["schedule_date"] is None)]
+        # Merge date-specific schedules with default schedules
+        schedules = merge_schedules(all_found, target_date)
 
         if not schedules:
             conn.close()
@@ -431,9 +482,7 @@ class DatabaseService:
                 ORDER BY start_time ASC
             """, (doctor_id, target_date, day_of_week))
             all_found = cursor.fetchall()
-
-            date_specific = [s for s in all_found if s["schedule_date"] == target_date]
-            schedules = date_specific if date_specific else [s for s in all_found if (s["schedule_date"] == "DEFAULT" or s["schedule_date"] is None)]
+            schedules = merge_schedules(all_found, target_date)
 
             if not schedules:
                 cursor.execute("ROLLBACK")
@@ -478,15 +527,22 @@ class DatabaseService:
                 conn.close()
                 return {"success": False, "error": "SLOTS_FULL"}
 
-            # Calculate slot-range token number (e.g., Slot 1: 1-10, Slot 2: 11-20)
+            # Determine target shift
+            target_shift = schedule["shift"] if ("shift" in schedule.keys() and schedule["shift"]) else ("EVENING" if schedule["start_time"] >= "16:00" else "MORNING")
+
+            # Calculate slot-range token number per shift (Morning 1..20, Evening 1..20)
             start_token = 1
             for sch in schedules:
+                sch_shift = sch["shift"] if ("shift" in sch.keys() and sch["shift"]) else ("EVENING" if sch["start_time"] >= "16:00" else "MORNING")
+                if sch_shift != target_shift:
+                    continue
                 if sch["slot_time_gu"] == target_slot_time_gu:
                     break
                 start_token += sch["max_slots"]
 
             token_number = start_token + booked_count
-            appointment_code = f"APT-{token_number}"
+            prefix = "M" if target_shift == "MORNING" else "E"
+            appointment_code = f"APT-{prefix}{token_number}"
 
             # Upsert patient
             cursor.execute("SELECT id FROM patients WHERE mobile_number = ?", (mobile_number,))
@@ -508,9 +564,9 @@ class DatabaseService:
             # Insert appointment
             cursor.execute("""
                 INSERT INTO appointments 
-                (appointment_code, token_number, doctor_id, patient_id, appointment_date, slot_time, source, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'CONFIRMED')
-            """, (appointment_code, token_number, doctor_id, patient_id, target_date, target_slot_time_gu, source))
+                (appointment_code, token_number, shift, doctor_id, patient_id, appointment_date, slot_time, source, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CONFIRMED')
+            """, (appointment_code, token_number, target_shift, doctor_id, patient_id, target_date, target_slot_time_gu, source))
             appointment_id = cursor.lastrowid
 
             cursor.execute("COMMIT")
@@ -542,7 +598,8 @@ class DatabaseService:
         self,
         date_str: Optional[str] = None,
         doctor_id: Optional[int] = None,
-        search_query: Optional[str] = None
+        search_query: Optional[str] = None,
+        shift: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Returns appointments with patient & doctor details for dashboard."""
         self.recalculate_and_sync_all_tokens()
@@ -552,7 +609,7 @@ class DatabaseService:
 
         sql = """
             SELECT 
-                a.id, a.appointment_code, a.token_number, a.appointment_date, a.slot_time,
+                a.id, a.appointment_code, a.token_number, a.shift, a.appointment_date, a.slot_time,
                 a.source, a.status, a.created_at,
                 p.mobile_number, p.name_gu as patient_name_gu,
                 d.name_en as doctor_name_en, d.name_gu as doctor_name_gu
@@ -568,12 +625,15 @@ class DatabaseService:
         if doctor_id:
             sql += " AND a.doctor_id = ?"
             params.append(doctor_id)
+        if shift:
+            sql += " AND a.shift = ?"
+            params.append(shift)
         if search_query:
             sql += " AND (p.name_gu LIKE ? OR p.mobile_number LIKE ? OR a.appointment_code LIKE ? OR CAST(a.token_number AS TEXT) LIKE ?)"
             q = f"%{search_query}%"
             params.extend([q, q, q, q])
 
-        sql += " ORDER BY a.token_number ASC, a.created_at ASC"
+        sql += " ORDER BY a.shift ASC, a.token_number ASC, a.created_at ASC"
 
         cursor.execute(sql, params)
         rows = [dict(r) for r in cursor.fetchall()]
@@ -590,8 +650,8 @@ class DatabaseService:
         conn.close()
         return updated
 
-    def get_schedules_for_date(self, doctor_id: int, target_date: str) -> List[Dict[str, Any]]:
-        """Returns doctor schedules for target date with booked counts and token ranges."""
+    def get_schedules_for_date(self, doctor_id: int, target_date: str, shift: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Returns doctor schedules for target date with booked counts and shift-based token ranges."""
         conn = self.get_connection()
         cursor = conn.cursor()
         target_dt = datetime.date.fromisoformat(target_date)
@@ -603,24 +663,38 @@ class DatabaseService:
             ORDER BY start_time ASC
         """, (doctor_id, target_date, day_of_week))
         all_found = cursor.fetchall()
-        date_specific = [s for s in all_found if s["schedule_date"] == target_date]
-        schedules = date_specific if date_specific else [s for s in all_found if (s["schedule_date"] == "DEFAULT" or s["schedule_date"] is None)]
+        schedules = merge_schedules(all_found, target_date)
 
         result = []
-        start_token = 1
+        morning_token = 1
+        evening_token = 1
+
         for s in schedules:
             slot_time_gu = s["slot_time_gu"]
             max_slots = s["max_slots"]
+            s_dict = dict(s)
+            slot_shift = s_dict.get("shift")
+            if not slot_shift:
+                slot_shift = "EVENING" if s["start_time"] >= "16:00" else "MORNING"
+
             cursor.execute("""
                 SELECT COUNT(*) as booked FROM appointments 
                 WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
             """, (doctor_id, target_date, slot_time_gu))
             booked_count = cursor.fetchone()["booked"]
 
-            result.append({
+            if slot_shift == "MORNING":
+                start_token = morning_token
+                morning_token += max_slots
+            else:
+                start_token = evening_token
+                evening_token += max_slots
+
+            slot_item = {
                 "id": s["id"],
                 "doctor_id": s["doctor_id"],
                 "schedule_date": s["schedule_date"],
+                "shift": slot_shift,
                 "start_time": s["start_time"],
                 "end_time": s["end_time"],
                 "slot_time_gu": slot_time_gu,
@@ -631,8 +705,10 @@ class DatabaseService:
                 "start_token": start_token,
                 "end_token": start_token + max_slots - 1,
                 "is_active": s["is_active"]
-            })
-            start_token += max_slots
+            }
+
+            if not shift or slot_shift == shift:
+                result.append(slot_item)
 
         conn.close()
         return result
@@ -647,9 +723,10 @@ class DatabaseService:
         slot_time_en: str,
         max_slots: int = 8,
         is_active: int = 1,
-        slot_id: Optional[int] = None
+        slot_id: Optional[int] = None,
+        shift: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Creates or updates a schedule slot for a specific date or default template."""
+        """Creates or updates a schedule slot with cross-shift collision prevention."""
         start_time = normalize_time_str(start_time, is_end_time=False)
         end_time = normalize_time_str(end_time, is_end_time=True, start_time=start_time)
 
@@ -657,8 +734,36 @@ class DatabaseService:
         slot_time_gu = sanitize_slot_label(slot_time_gu, is_english=False)
         slot_time_en = sanitize_slot_label(slot_time_en, is_english=True)
 
+        if not shift:
+            shift = "EVENING" if start_time >= "16:00" else "MORNING"
+
         conn = self.get_connection()
         cursor = conn.cursor()
+
+        # Cross-shift and duplicate collision check:
+        # Prevent overlapping times for the same doctor and date
+        cursor.execute("""
+            SELECT * FROM doctor_schedules
+            WHERE doctor_id = ? AND (schedule_date = ? OR schedule_date = 'DEFAULT') AND is_active = 1
+        """, (doctor_id, schedule_date))
+        existing_slots = cursor.fetchall()
+
+        for es in existing_slots:
+            if slot_id and es["id"] == slot_id:
+                continue
+            es_start = normalize_time_str(es["start_time"], is_end_time=False)
+            es_end = normalize_time_str(es["end_time"], is_end_time=True, start_time=es_start)
+            es_dict = dict(es)
+            es_shift = es_dict.get("shift") or ("EVENING" if es_start >= "16:00" else "MORNING")
+
+            # Overlap check: new_start < existing_end and new_end > existing_start
+            if start_time < es_end and end_time > es_start:
+                shift_label = "સવારના" if es_shift == "MORNING" else "સાંજના"
+                conn.close()
+                return {
+                    "success": False,
+                    "error": f"આ સમય સ્લોટ ({slot_time_gu}) પહેલેથી {shift_label} સ્લોટમાં શેડ્યૂલ કરેલ સમય સાથે ઓવરલેપ થાય છે! ({es['slot_time_gu']})"
+                }
 
         target_dt = datetime.date.fromisoformat(schedule_date) if schedule_date != "DEFAULT" else datetime.date.today()
         day_of_week = target_dt.weekday()
@@ -666,21 +771,51 @@ class DatabaseService:
         if slot_id:
             cursor.execute("""
                 UPDATE doctor_schedules 
-                SET start_time=?, end_time=?, slot_time_gu=?, slot_time_en=?, max_slots=?, is_active=?
+                SET start_time=?, end_time=?, slot_time_gu=?, slot_time_en=?, max_slots=?, is_active=?, shift=?
                 WHERE id=?
-            """, (start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, slot_id))
+            """, (start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, shift, slot_id))
             res_id = slot_id
         else:
             cursor.execute("""
                 INSERT INTO doctor_schedules 
-                (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active))
+                (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, shift)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, shift))
             res_id = cursor.lastrowid
 
         conn.commit()
         conn.close()
+        self.recalculate_and_sync_all_tokens()
         return {"success": True, "slot_id": res_id}
+
+    def delete_slot(self, slot_id: int) -> Dict[str, Any]:
+        """Deletes a schedule slot if no active appointments are booked for it."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM doctor_schedules WHERE id = ?", (slot_id,))
+        slot = cursor.fetchone()
+        if not slot:
+            conn.close()
+            return {"success": False, "error": "સ્લોટ મળ્યો નથી (Slot not found)"}
+
+        # Check for active appointments
+        cursor.execute("""
+            SELECT COUNT(*) as cnt FROM appointments
+            WHERE doctor_id = ? AND appointment_date = ? AND slot_time = ? AND status != 'CANCELLED'
+        """, (slot["doctor_id"], slot["schedule_date"], slot["slot_time_gu"]))
+        booked = cursor.fetchone()["cnt"]
+        if booked > 0:
+            conn.close()
+            return {
+                "success": False, 
+                "error": f"આ સ્લોટમાં {booked} દર્દીઓની એપોઇન્ટમેન્ટ બુક થયેલી છે! તેને ડિલીટ કરી શકાતો નથી. તમે તેને નિષ્ક્રિય (Inactive) કરી શકો છો."
+            }
+
+        cursor.execute("DELETE FROM doctor_schedules WHERE id = ?", (slot_id,))
+        conn.commit()
+        conn.close()
+        self.recalculate_and_sync_all_tokens()
+        return {"success": True}
 
     def set_doctor_slots(self, doctor_id: int, max_slots: int):
         """Helper for testing: update doctor's max slots."""
