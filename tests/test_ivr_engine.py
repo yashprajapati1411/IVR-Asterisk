@@ -53,6 +53,13 @@ class MockAGIChannel(AGIChannel):
         self.files_recorded.append(filename)
         return True
 
+    async def set_variable(self, name: str, value: str):
+        self.command_log.append(f"SET_VARIABLE: {name}={value}")
+        if not hasattr(self, "variables"):
+            self.variables = {}
+        self.variables[name] = value
+        return True
+
     async def hangup(self):
         self.command_log.append("HANGUP")
         self.is_hungup = True
@@ -142,70 +149,53 @@ async def test_path_dr_jaydeep(setup_env):
     assert "APT-" in engine.session.appointment_code
 
 @pytest.mark.asyncio
-async def test_path_other_information(setup_env):
+async def test_path_transfer_receptionist_option_3(setup_env):
     db, stt, tts = setup_env
-    # Welcome -> 3 (Other info)
+    # Welcome -> 3 (Emergency & Reception Transfer)
     inputs = ["3"]
     channel = MockAGIChannel(inputs=inputs)
     engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
 
     await engine.run()
 
-    assert engine.session.state == "HANGUP"
-    assert any("other_info" in cmd for cmd in channel.files_streamed)
-    assert engine.session.selected_doctor_id is None
+    assert engine.session.state == "FORWARD"
+    assert any("connecting_receptionist" in cmd for cmd in channel.files_streamed)
+    assert channel.variables.get("IVR_ACTION") == "FORWARD_RECEPTION"
+    assert channel.variables.get("FORWARD_TARGET") == "9016771721"
+    # Channel should NOT have been hung up by IVREngine because Asterisk dialplan handles PJSIP Dial
+    assert "HANGUP" not in channel.command_log
 
 @pytest.mark.asyncio
-async def test_other_information_return_to_main_menu(setup_env):
+async def test_no_slots_emergency_transfer(setup_env):
     db, stt, tts = setup_env
-    # 1: Welcome -> 3 (Other info)
-    # 2: At Other info -> 1 (Return to Main Menu)
-    # 3: At Welcome -> 1 (Dr. Shaishav)
-    # 4: Slots -> 1 (Confirm booking)
-    # 5: Mobile -> 9825012345
-    # 6: Mobile confirm -> 1
-    # 7: Name confirm -> 1
-    # 8: Final confirm -> 1
-    stt.set_mock_name("યશ")
-    inputs = ["3", "1", "1", "1", "9825012345", "1", "1", "1"]
-    channel = MockAGIChannel(inputs=inputs)
-    engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
-
-    await engine.run()
-
-    assert any("other_info" in cmd for cmd in channel.files_streamed)
-    assert engine.session.selected_doctor_id == 1
-    assert engine.session.state == "DONE"
-
-@pytest.mark.asyncio
-async def test_no_slots_and_main_menu(setup_env):
-    db, stt, tts = setup_env
-    # Set doctor 1 slots to 0
+    # Doctor 1 has 0 slots
     db.set_doctor_slots(doctor_id=1, max_slots=0)
 
     # Inputs:
     # 1: Welcome -> 1 (Dr. Shaishav)
-    # 2: No slots -> 2 (Return to Main Menu)
-    # 3: At Welcome -> 3 (Other info -> Hangup)
-    inputs = ["1", "2", "3"]
+    # 2: No slots -> 1 (Emergency transfer to Reception)
+    inputs = ["1", "1"]
     channel = MockAGIChannel(inputs=inputs)
     engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
 
     await engine.run()
 
     assert any("no_slots_today" in cmd for cmd in channel.files_streamed)
-    assert any("other_info" in cmd for cmd in channel.files_streamed)
+    assert any("connecting_receptionist" in cmd for cmd in channel.files_streamed)
+    assert engine.session.state == "FORWARD"
+    assert channel.variables.get("IVR_ACTION") == "FORWARD_RECEPTION"
+    assert channel.variables.get("FORWARD_TARGET") == "9016771721"
 
 @pytest.mark.asyncio
-async def test_no_slots_dr_jaydeep_and_main_menu(setup_env):
+async def test_no_slots_return_to_main_menu(setup_env):
     db, stt, tts = setup_env
-    # Set doctor 2 slots to 0
+    # Doctor 2 has 0 slots
     db.set_doctor_slots(doctor_id=2, max_slots=0)
 
     # Inputs:
     # 1: Welcome -> 2 (Dr. Jaydeep)
     # 2: No slots -> 2 (Return to Main Menu)
-    # 3: At Welcome -> 3 (Other info -> Hangup)
+    # 3: At Welcome -> 3 (Transfer to Reception)
     inputs = ["2", "2", "3"]
     channel = MockAGIChannel(inputs=inputs)
     engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
@@ -213,7 +203,9 @@ async def test_no_slots_dr_jaydeep_and_main_menu(setup_env):
     await engine.run()
 
     assert any("no_slots_today" in cmd for cmd in channel.files_streamed)
-    assert any("other_info" in cmd for cmd in channel.files_streamed)
+    assert any("connecting_receptionist" in cmd for cmd in channel.files_streamed)
+    assert engine.session.state == "FORWARD"
+    assert channel.variables.get("IVR_ACTION") == "FORWARD_RECEPTION"
 
 @pytest.mark.asyncio
 async def test_invalid_mobile_retry(setup_env):
@@ -272,7 +264,7 @@ async def test_final_confirmation_cancel_to_menu(setup_env):
     # Mobile Confirm -> 1
     # Name Confirm -> 1
     # Final Confirm -> 2 (Return to Main Menu!)
-    # Welcome -> 3 (Other Info -> Hangup)
+    # Welcome -> 3 (Transfer to Reception)
     inputs = ["1", "1", "9825033445", "1", "1", "2", "3"]
     channel = MockAGIChannel(inputs=inputs)
     engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
@@ -280,38 +272,6 @@ async def test_final_confirmation_cancel_to_menu(setup_env):
     await engine.run()
 
     assert engine.session.appointment_code is None # No appointment created
-    assert any("other_info" in cmd for cmd in channel.files_streamed)
+    assert any("connecting_receptionist" in cmd for cmd in channel.files_streamed)
+    assert engine.session.state == "FORWARD"
 
-
-@pytest.mark.asyncio
-async def test_path_reception_number_repeat_and_return_to_main_menu(setup_env):
-    db, stt, tts = setup_env
-    # 1: Welcome -> 9 (Reception Number)
-    # 2: At Reception Number -> 1 (Repeat Number)
-    # 3: At Reception Number -> 2 (Return to Main Menu)
-    # 4: Welcome -> 3 (Other Info -> Hangup)
-    inputs = ["9", "1", "2", "3"]
-    channel = MockAGIChannel(inputs=inputs)
-    engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
-
-    await engine.run()
-
-    assert any("reception_number" in cmd for cmd in channel.files_streamed)
-    assert any("other_info" in cmd for cmd in channel.files_streamed)
-    assert engine.session.state == "HANGUP"
-
-@pytest.mark.asyncio
-async def test_path_reception_number_timeout_disconnect(setup_env):
-    db, stt, tts = setup_env
-    # 1: Welcome -> 9 (Reception Number)
-    # 2: At Reception Number -> Timeout (no input)
-    inputs = ["9"]
-    channel = MockAGIChannel(inputs=inputs)
-    engine = IVREngine(channel=channel, db_service=db, stt_service=stt, tts_service=tts)
-
-    await engine.run()
-
-    assert any("reception_number" in cmd for cmd in channel.files_streamed)
-    assert any("reception_number_only" in cmd for cmd in channel.files_streamed)
-    assert any("goodbye" in cmd for cmd in channel.files_streamed)
-    assert engine.session.state == "HANGUP"

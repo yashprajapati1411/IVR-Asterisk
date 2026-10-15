@@ -156,7 +156,18 @@ class AGIChannel:
                 return result
         return None
 
+    async def set_variable(self, name: str, value: str) -> bool:
+        """Sets an Asterisk channel variable: SET VARIABLE <name> <value>"""
+        status, result, _ = await self.send_command(f'SET VARIABLE "{name}" "{value}"')
+        return status == 200
+
+    async def execute(self, app: str, args: str = "") -> Tuple[int, str, str]:
+        """Executes an Asterisk dialplan application: EXEC <app> <args>"""
+        cmd = f'EXEC {app} "{args}"' if args else f'EXEC {app}'
+        return await self.send_command(cmd)
+
     async def hangup(self):
         if not self.is_hungup:
             await self.send_command("HANGUP")
             self.is_hungup = True
+

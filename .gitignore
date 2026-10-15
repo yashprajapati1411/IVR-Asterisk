@@ -20,9 +20,10 @@ ENV/
 # Audio cache & temporary test recordings
 sounds/cache/*
 !sounds/cache/.gitkeep
-sounds/gu/tts_*.wav
+sounds/gu/tts_*.*
 test_*_cache/
 *.mp3
+*.alaw
 
 # Log files
 *.log

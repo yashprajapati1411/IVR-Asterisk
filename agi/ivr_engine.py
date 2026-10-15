@@ -112,6 +112,8 @@ class IVREngine:
                     await self._state_welcome_menu()
                 elif self.session.state == "CHECK_AVAILABILITY":
                     await self._state_check_availability()
+                elif self.session.state == "TRANSFER_RECEPTIONIST":
+                    await self._state_transfer_receptionist()
                 elif self.session.state == "MOBILE_CAPTURE":
                     await self._state_mobile_capture()
                 elif self.session.state == "NAME_CAPTURE":
@@ -120,11 +122,7 @@ class IVREngine:
                     await self._state_final_confirmation()
                 elif self.session.state == "BOOKING_TRANSACTION":
                     await self._state_booking_transaction()
-                elif self.session.state == "OTHER_INFO":
-                    await self._state_other_info()
-                elif self.session.state == "RECEPTION_NUMBER":
-                    await self._state_reception_number()
-                elif self.session.state in ("DONE", "HANGUP"):
+                elif self.session.state in ("DONE", "HANGUP", "FORWARD"):
                     break
                 else:
                     logger.error(f"Unknown state: {self.session.state}")
@@ -133,7 +131,8 @@ class IVREngine:
         except Exception as e:
             logger.exception(f"Error during IVR execution: {e}")
         finally:
-            await self.channel.hangup()
+            if self.session.state != "FORWARD":
+                await self.channel.hangup()
             await self.channel.verbose("IVR Call Finished.", 1)
 
     # -------------------------------------------------------------------------
@@ -142,9 +141,9 @@ class IVREngine:
     async def _state_welcome_menu(self):
         """
         Gujarati Welcome Menu:
-        Press 1 -> Dr. Shaishav
-        Press 2 -> Dr. Jaydeep
-        Press 3 -> Other Info
+        Press 1 -> Dr. Shaishav Soni
+        Press 2 -> Dr. Jaydeep Patel
+        Press 3 -> Emergency & Speak with Receptionist (Forward to 9016771721)
         """
         attempts = 0
         max_attempts = 3
@@ -169,15 +168,6 @@ class IVREngine:
                 return
 
             elif digit == "3":
-                self.session.state = "OTHER_INFO"
-                return
-
-            elif digit == "9":
-                self.session.state = "RECEPTION_NUMBER"
-                return
-
-            elif digit == "0":
-                await self.channel.stream_file(self._sound("gu/connecting_receptionist"))
                 self.session.state = "TRANSFER_RECEPTIONIST"
                 return
 
@@ -190,76 +180,20 @@ class IVREngine:
         self.session.state = "HANGUP"
 
     # -------------------------------------------------------------------------
-    # 2. OTHER INFORMATION / FEES / SERVICES
+    # 2. TRANSFER TO RECEPTIONIST (9016771721)
     # -------------------------------------------------------------------------
-    async def _state_other_info(self):
+    async def _state_transfer_receptionist(self):
         """
-        Plays Hospital Info / Consultation Fees:
-        "ફીસની માહિતી... મુખ્ય મેનુ માટે 1 દબાવો."
-        Waits 20 seconds for user input.
-        If user enters 1 (or any key) -> Return to Main Menu (WELCOME).
-        If 20s timeout occurs with no input -> Goodbye & Hangup.
+        Transfers the caller to Hospital Reception (9016771721):
+        1. Plays connecting prompt: "કૃપા કરીને રાહ જુઓ, તમારો કોલ હોસ્પિટલ રિસેપ્શનિસ્ટ સાથે જોડવામાં આવી રહ્યો છે."
+        2. Sets Asterisk channel variables: IVR_ACTION=FORWARD_RECEPTION, FORWARD_TARGET=9016771721
+        3. Exits FastAGI so Asterisk dialplan executes Dial(PJSIP/9016771721@carrier-trunk,45,tT).
         """
-        digit = await self.channel.get_data(
-            self._sound("gu/other_info"),
-            timeout_ms=20000,
-            max_digits=1
-        )
-        logger.info(f"Other Info input received: '{digit}'")
-
-        if digit is not None and digit != "":
-            # User pressed 1 or any key -> return to main menu
-            self.session.state = "WELCOME"
-            return
-
-        # 20 seconds timeout with no key pressed -> goodbye and hangup
-        await self.channel.stream_file(self._sound("gu/goodbye"))
-        self.session.state = "HANGUP"
-
-    # -------------------------------------------------------------------------
-    # 2b. RECEPTION PHONE NUMBER
-    # -------------------------------------------------------------------------
-    async def _state_reception_number(self):
-        """
-        Plays Hospital Reception Phone Number (9016771721):
-        'રિસેપ્શનનો નંબર છે: 9 0 1 6 7 7 1 7 2 1. નંબર ફરી સાંભળવા માટે 1 દબાવો, મુખ્ય મેનુમાં જવા માટે 2 દબાવો.'
-        - Press 1: Repeat number and menu options.
-        - Press 2: Return to Main Menu (WELCOME).
-        - No input for 20 seconds: Repeat number once more, then goodbye and hangup.
-        """
-        attempts = 0
-        max_repeats = 5
-
-        while attempts < max_repeats and not self.channel.is_hungup:
-            digit = await self.channel.get_data(
-                self._sound("gu/reception_number"),
-                timeout_ms=20000,
-                max_digits=1
-            )
-            logger.info(f"Reception Number menu input: '{digit}'")
-
-            if digit == "1":
-                attempts += 1
-                continue
-
-            elif digit == "2":
-                self.session.state = "WELCOME"
-                return
-
-            elif digit is None or digit == "":
-                # 20-second timeout: repeat number once more and disconnect
-                logger.info("Reception Number menu timeout (20s) -> repeating number and disconnecting")
-                await self.channel.stream_file(self._sound("gu/reception_number_only"))
-                await self.channel.stream_file(self._sound("gu/goodbye"))
-                self.session.state = "HANGUP"
-                return
-
-            else:
-                attempts += 1
-                await self.channel.stream_file(self._sound("gu/invalid_option"))
-
-        await self.channel.stream_file(self._sound("gu/goodbye"))
-        self.session.state = "HANGUP"
+        logger.info(f"Forwarding call {self.session.unique_id} to Receptionist (9016771721)...")
+        await self.channel.stream_file(self._sound("gu/connecting_receptionist"))
+        await self.channel.set_variable("IVR_ACTION", "FORWARD_RECEPTION")
+        await self.channel.set_variable("FORWARD_TARGET", "9016771721")
+        self.session.state = "FORWARD"
 
     # -------------------------------------------------------------------------
     # 3. CHECK TODAY'S HOURLY SLOT AVAILABILITY
@@ -268,25 +202,33 @@ class IVREngine:
         """
         Checks today's hourly slot availability for selected doctor.
         Presents available hourly slots (max 8 per slot) to the caller.
+        If no slots available:
+          Plays no_slots_today ("...ઇમરજન્સી માટે 1 દબાવો, મુખ્ય મેનુમાં જવા માટે 2 દબાવો.")
+          1 -> TRANSFER_RECEPTIONIST (forward to 9016771721)
+          2 -> WELCOME (Main Menu)
         """
         doctor_id = self.session.selected_doctor_id
         avail = self.db.check_availability(doctor_id)
+        slots = avail.get("slots", []) if avail.get("available", False) else []
 
-        if not avail.get("available", False):
+        if not slots:
             attempts = 0
             while attempts < 3 and not self.channel.is_hungup:
                 digit = await self.channel.get_data(self._sound("gu/no_slots_today"), timeout_ms=6000, max_digits=1)
-                if digit == "2":
+                logger.info(f"No slots menu input received: '{digit}'")
+                if digit == "1":
+                    self.session.state = "TRANSFER_RECEPTIONIST"
+                    return
+                elif digit == "2":
                     self.session.state = "WELCOME"
                     return
-                attempts += 1
+                elif digit is not None and digit != "":
+                    attempts += 1
+                    if attempts < 3:
+                        await self.channel.stream_file(self._sound("gu/invalid_option"))
+                else:
+                    attempts += 1
 
-            self.session.state = "WELCOME"
-            return
-
-        slots = avail.get("slots", [])
-        if not slots:
-            await self.channel.stream_file(self._sound("gu/no_slots_today"))
             self.session.state = "WELCOME"
             return
 
