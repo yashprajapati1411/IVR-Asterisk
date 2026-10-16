@@ -17,14 +17,14 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.tts_service import TTSService, _convert_to_asterisk_wav
+from services.tts_service import TTSService, _convert_to_asterisk_wav, ensure_slin_file, ensure_alaw_file
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("PromptGenerator")
 
 PROMPTS = {
     "welcome_menu": (
-        "ત્રિનય ઓર્થોપેડિક હોસ્પિટલમાં આપનું સ્વાગત છે. "
+        "ત્રિનય ઓર્થોપેડિક હોસ્પિટલ માં આપનું સ્વાગત છે. "
         "ડૉક્ટર શૈશવ સોની માટે 1 દબાવો, "
         "ડૉક્ટર જયદીપ પટેલ માટે 2 દબાવો, "
         "ઇમરજન્સી અને રિસેપ્શન પર વાત કરવા માટે 3 દબાવો."
@@ -161,6 +161,7 @@ def main():
                     dst.write(src.read())
 
         if os.path.exists(out_wav):
+            ensure_slin_file(out_wav)
             logger.info(f"Successfully created -> {out_wav} ({os.path.getsize(out_wav)} bytes)")
 
     beep_wav = os.path.join(target_dir, "beep.wav")

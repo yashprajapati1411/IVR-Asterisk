@@ -65,15 +65,30 @@ def _convert_to_asterisk_wav(input_path: str, output_wav: str) -> bool:
         return False
     return False
 
+def ensure_slin_file(wav_path: str):
+    """Ensures a native .slin (raw 16-bit 8kHz mono PCM) file exists alongside the .wav file."""
+    if not wav_path or not wav_path.endswith(".wav") or not os.path.exists(wav_path):
+        return
+    slin_path = wav_path[:-4] + ".slin"
+    if os.path.exists(slin_path) and os.path.getsize(slin_path) > 100:
+        return
+    try:
+        with wave.open(wav_path, 'rb') as w:
+            if w.getframerate() == 8000 and w.getsampwidth() == 2 and w.getnchannels() == 1:
+                frames = w.readframes(w.getnframes())
+                with open(slin_path, 'wb') as sf:
+                    sf.write(frames)
+    except Exception as e:
+        logger.warning(f"Failed to create .slin for {wav_path}: {e}")
+
 class TTSService:
-    def __init__(self, api_key: Optional[str] = None, cache_dir: Optional[str] = None, speed_rate: str = "+45%"):
+    def __init__(self, api_key: Optional[str] = None, cache_dir: Optional[str] = None, speed_rate: str = "+25%"):
         self.api_key = api_key or os.getenv("SARVAM_API_KEY", "")
         self.cache_dir = (cache_dir.strip() if cache_dir and cache_dir.strip() else CACHE_DIR)
-        self.speed_rate = speed_rate # 1.5x speed rate
+        self.speed_rate = speed_rate
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def _get_cache_path(self, text: str, speed_rate: Optional[str] = None) -> str:
-        # Include speed rate in hash so changes in rate invalidate old cache
         rate = speed_rate or self.speed_rate
         text_hash = hashlib.md5(f"{text}_{rate}".encode("utf-8")).hexdigest()
         return os.path.join(self.cache_dir, f"tts_{text_hash}.wav")
@@ -84,13 +99,50 @@ class TTSService:
         Returns the absolute filepath to the .wav file.
         """
         eff_speed = speed_rate or self.speed_rate
-        eff_pace = pace if pace is not None else 1.4
+        eff_pace = pace if pace is not None else 1.15
         cache_path = self._get_cache_path(text, eff_speed)
         if os.path.exists(cache_path) and os.path.getsize(cache_path) > 1000:
             ensure_alaw_file(cache_path)
+            ensure_slin_file(cache_path)
             return cache_path
 
-        # 1. Try Edge-TTS (gu-IN-DhwaniNeural) first to match welcome_menu.wav speaker
+        # 1. Primary: Sarvam TTS (bulbul:v3, speaker: kavya) for pristine Indian language pronunciation
+        if self.api_key and not self.api_key.startswith("mock") and len(self.api_key) > 5 and getattr(self, "_sarvam_active", True):
+            try:
+                headers = {
+                    "api-subscription-key": self.api_key,
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "inputs": [text],
+                    "target_language_code": "gu-IN",
+                    "speaker": "kavya",
+                    "pitch": 0,
+                    "pace": eff_pace,
+                    "loudness": 1.5,
+                    "speech_sample_rate": 8000,
+                    "enable_preprocessing": True,
+                    "model": "bulbul:v3"
+                }
+                res = requests.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=8.0)
+                if res.status_code == 200:
+                    audios = res.json().get("audios", [])
+                    if audios:
+                        raw_audio = base64.b64decode(audios[0])
+                        with open(cache_path, "wb") as f:
+                            f.write(raw_audio)
+                        ensure_alaw_file(cache_path)
+                        ensure_slin_file(cache_path)
+                        logger.info(f"Synthesized Gujarati audio via Sarvam TTS (bulbul:v3/kavya) -> {cache_path}")
+                        return cache_path
+                else:
+                    if res.status_code in (401, 402, 403):
+                        self._sarvam_active = False
+                    logger.warning(f"Sarvam TTS returned status {res.status_code}: {res.text}")
+            except Exception as e:
+                logger.warning(f"Sarvam TTS failed, trying Edge-TTS: {e}")
+
+        # 2. Secondary Fallback: Edge-TTS
         try:
             temp_mp3 = cache_path.replace(".wav", ".mp3")
             try:
@@ -100,7 +152,6 @@ class TTSService:
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        # Running in an active async event loop
                         import concurrent.futures
                         with concurrent.futures.ThreadPoolExecutor() as executor:
                             executor.submit(lambda: asyncio.run(communicate.save(temp_mp3))).result()
@@ -123,49 +174,16 @@ class TTSService:
                     if os.path.exists(temp_mp3):
                         os.remove(temp_mp3)
                     if os.path.exists(cache_path) and os.path.getsize(cache_path) > 500:
+                        ensure_slin_file(cache_path)
                         logger.info(f"Synthesized Gujarati audio via Edge-TTS ({eff_speed}) -> {cache_path}")
                         return cache_path
         except Exception as e:
-            logger.warning(f"Edge-TTS failed, trying Sarvam TTS: {e}")
+            logger.warning(f"Edge-TTS failed: {e}")
 
-        # 2. Try Sarvam TTS (bulbul:v3) as high-quality fallback
-        if self.api_key and not self.api_key.startswith("mock") and len(self.api_key) > 5 and getattr(self, "_sarvam_active", True):
-            try:
-                headers = {
-                    "api-subscription-key": self.api_key,
-                    "Content-Type": "application/json"
-                }
-                payload = {
-                    "inputs": [text],
-                    "target_language_code": "gu-IN",
-                    "speaker": "pooja",
-                    "pitch": 0,
-                    "pace": eff_pace,
-                    "loudness": 1.5,
-                    "speech_sample_rate": 8000,
-                    "enable_preprocessing": True,
-                    "model": "bulbul:v3"
-                }
-                res = requests.post(SARVAM_TTS_URL, json=payload, headers=headers, timeout=5.0)
-                if res.status_code == 200:
-                    audios = res.json().get("audios", [])
-                    if audios:
-                        raw_audio = base64.b64decode(audios[0])
-                        with open(cache_path, "wb") as f:
-                            f.write(raw_audio)
-                        ensure_alaw_file(cache_path)
-                        logger.info(f"Synthesized Gujarati audio via Sarvam TTS (bulbul:v3) -> {cache_path}")
-                        return cache_path
-                else:
-                    if res.status_code in (401, 402, 403):
-                        self._sarvam_active = False
-                    logger.warning(f"Sarvam TTS returned status {res.status_code}: {res.text}")
-            except Exception as e:
-                logger.warning(f"Sarvam TTS fallback failed: {e}")
-
-        # 3. Fallback tone
+        # 3. Tone fallback
         self._generate_fallback_wav(cache_path, duration_sec=1.0)
         ensure_alaw_file(cache_path)
+        ensure_slin_file(cache_path)
         return cache_path
 
     def _generate_fallback_wav(self, output_path: str, duration_sec: float = 1.0):
