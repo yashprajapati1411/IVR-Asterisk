@@ -25,3 +25,4 @@ class SlotSaveRequest(BaseModel):
     slot_time_en: str # '10:00 AM to 11:00 AM'
     max_slots: int = 8
     is_active: int = 1
+    day_of_week: Optional[int] = None

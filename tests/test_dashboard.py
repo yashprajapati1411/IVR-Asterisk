@@ -64,7 +64,7 @@ def test_manual_booking_and_slot_token_ranges(setup_dashboard_env):
     data1 = res1.json()
     assert data1["success"] is True
     assert data1["token_number"] == 1
-    assert data1["appointment_code"] == "APT-1"
+    assert data1["appointment_code"] == "APT-M1"
     assert data1["source"] == "MANUAL"
 
     # 2. Manual Walk-in Booking in Slot 2 (11-12 PM for Dr. Jaydeep, doctor_id=2)
@@ -80,7 +80,7 @@ def test_manual_booking_and_slot_token_ranges(setup_dashboard_env):
     data2 = res2.json()
     assert data2["success"] is True
     assert data2["token_number"] == 9
-    assert data2["appointment_code"] == "APT-9"
+    assert data2["appointment_code"] == "APT-M9"
 
 def test_dashboard_appointments_list_and_search(setup_dashboard_env):
     db, client = setup_dashboard_env

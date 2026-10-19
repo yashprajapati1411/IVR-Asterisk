@@ -724,7 +724,8 @@ class DatabaseService:
         max_slots: int = 8,
         is_active: int = 1,
         slot_id: Optional[int] = None,
-        shift: Optional[str] = None
+        shift: Optional[str] = None,
+        day_of_week: Optional[int] = None
     ) -> Dict[str, Any]:
         """Creates or updates a schedule slot with cross-shift collision prevention."""
         start_time = normalize_time_str(start_time, is_end_time=False)
@@ -740,12 +741,37 @@ class DatabaseService:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        calc_day_of_week = None
+        if schedule_date != "DEFAULT":
+            try:
+                target_dt = datetime.date.fromisoformat(schedule_date)
+                calc_day_of_week = target_dt.weekday()
+            except Exception:
+                calc_day_of_week = datetime.date.today().weekday()
+        else:
+            calc_day_of_week = day_of_week if day_of_week is not None else datetime.date.today().weekday()
+
+        if slot_id and (calc_day_of_week is None or schedule_date == "DEFAULT"):
+            cursor.execute("SELECT day_of_week, schedule_date FROM doctor_schedules WHERE id = ?", (slot_id,))
+            existing_row = cursor.fetchone()
+            if existing_row:
+                if calc_day_of_week is None and existing_row["day_of_week"] is not None:
+                    calc_day_of_week = existing_row["day_of_week"]
+                if not schedule_date:
+                    schedule_date = existing_row["schedule_date"]
+
         # Cross-shift and duplicate collision check:
-        # Prevent overlapping times for the same doctor and date
-        cursor.execute("""
-            SELECT * FROM doctor_schedules
-            WHERE doctor_id = ? AND (schedule_date = ? OR schedule_date = 'DEFAULT') AND is_active = 1
-        """, (doctor_id, schedule_date))
+        # Prevent overlapping times for the same doctor on the same date (or same day_of_week for DEFAULT templates)
+        if schedule_date != "DEFAULT":
+            cursor.execute("""
+                SELECT * FROM doctor_schedules
+                WHERE doctor_id = ? AND schedule_date = ? AND is_active = 1
+            """, (doctor_id, schedule_date))
+        else:
+            cursor.execute("""
+                SELECT * FROM doctor_schedules
+                WHERE doctor_id = ? AND schedule_date = 'DEFAULT' AND day_of_week = ? AND is_active = 1
+            """, (doctor_id, calc_day_of_week))
         existing_slots = cursor.fetchall()
 
         for es in existing_slots:
@@ -765,9 +791,6 @@ class DatabaseService:
                     "error": f"આ સમય સ્લોટ ({slot_time_gu}) પહેલેથી {shift_label} સ્લોટમાં શેડ્યૂલ કરેલ સમય સાથે ઓવરલેપ થાય છે! ({es['slot_time_gu']})"
                 }
 
-        target_dt = datetime.date.fromisoformat(schedule_date) if schedule_date != "DEFAULT" else datetime.date.today()
-        day_of_week = target_dt.weekday()
-
         if slot_id:
             cursor.execute("""
                 UPDATE doctor_schedules 
@@ -780,7 +803,7 @@ class DatabaseService:
                 INSERT INTO doctor_schedules 
                 (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, shift)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (doctor_id, day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, shift))
+            """, (doctor_id, calc_day_of_week, schedule_date, start_time, end_time, slot_time_gu, slot_time_en, max_slots, is_active, shift))
             res_id = cursor.lastrowid
 
         conn.commit()

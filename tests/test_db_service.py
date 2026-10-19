@@ -204,3 +204,46 @@ def test_delete_slot(test_db):
     del_res = test_db.delete_slot(slot_id)
     assert del_res["success"] is True
 
+def test_date_specific_slot_no_false_collision_with_default_templates(test_db):
+    # Dr. Jaydeep (doctor_id=2) has default slots on everyday (days 0-6)
+    # Adding a date-specific slot for 10:00-11:00 on 2026-10-19 (Monday) must succeed
+    res = test_db.save_or_update_slot(
+        doctor_id=2,
+        schedule_date="2026-10-19",
+        start_time="10:00",
+        end_time="11:00",
+        slot_time_gu="સવારે 10:00 થી 11:00",
+        slot_time_en="10:00 AM to 11:00 AM",
+        max_slots=8,
+        shift="MORNING"
+    )
+    assert res["success"] is True, f"Failed with: {res.get('error')}"
+
+    # Dr. Shaishav (doctor_id=1) adding evening slot 17:00-18:00 on 2026-10-19 must succeed
+    res_shaishav = test_db.save_or_update_slot(
+        doctor_id=1,
+        schedule_date="2026-10-19",
+        start_time="17:00",
+        end_time="18:00",
+        slot_time_gu="સાંજે 5:00 થી 6:00",
+        slot_time_en="5:00 PM to 6:00 PM",
+        max_slots=8,
+        shift="EVENING"
+    )
+    assert res_shaishav["success"] is True, f"Failed with: {res_shaishav.get('error')}"
+
+    # Attempting to add an overlapping slot on that same date (e.g. 10:30-11:30) must still fail
+    res_overlap = test_db.save_or_update_slot(
+        doctor_id=2,
+        schedule_date="2026-10-19",
+        start_time="10:30",
+        end_time="11:30",
+        slot_time_gu="સવારે 10:30 થી 11:30",
+        slot_time_en="10:30 AM to 11:30 AM",
+        max_slots=8,
+        shift="MORNING"
+    )
+    assert res_overlap["success"] is False
+    assert "ઓવરલેપ" in res_overlap["error"]
+
+

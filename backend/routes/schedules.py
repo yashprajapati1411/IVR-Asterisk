@@ -37,7 +37,8 @@ def save_slot(req: SlotSaveRequest):
             max_slots=req.max_slots,
             is_active=req.is_active,
             slot_id=req.slot_id,
-            shift=req.shift
+            shift=req.shift,
+            day_of_week=req.day_of_week
         )
         if not res.get("success", False):
             raise HTTPException(status_code=400, detail=res.get("error", "Failed to save slot"))
