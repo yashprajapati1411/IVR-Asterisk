@@ -7,6 +7,8 @@ Name Capture (Sarvam STT) -> Final Confirmation -> DB Transaction -> Booking Suc
 import os
 import re
 import wave
+import math
+import struct
 import logging
 from typing import Optional
 
@@ -14,12 +16,13 @@ from .agi_channel import AGIChannel
 from .session import CallSession
 from services.db_service import DatabaseService
 from services.stt_service import SarvamSTTService
-from services.tts_service import TTSService
+from services.tts_service import TTSService, ensure_alaw_file, ensure_slin_file
 
 logger = logging.getLogger("IVREngine")
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOUNDS_DIR = os.getenv("ASTERISK_SOUNDS_DIR", os.path.join(PROJECT_ROOT, "sounds"))
+env_sounds = os.getenv("ASTERISK_SOUNDS_DIR", "").strip()
+SOUNDS_DIR = env_sounds if env_sounds else os.path.join(PROJECT_ROOT, "sounds")
 
 class IVREngine:
     def __init__(
@@ -52,11 +55,29 @@ class IVREngine:
         full = os.path.join(self.sounds_dir, path)
         return full.replace("\\", "/")
 
+    @staticmethod
+    def _apply_microfade(raw_pcm: bytes, fade_samples: int = 40) -> bytes:
+        """Applies a smooth cosine fade-in and fade-out (5ms) to eliminate audio popping/cracking."""
+        num_samples = len(raw_pcm) // 2
+        if num_samples < fade_samples * 2:
+            return raw_pcm
+        samples = list(struct.unpack(f"<{num_samples}h", raw_pcm))
+        for i in range(fade_samples):
+            factor = 0.5 * (1 - math.cos(math.pi * i / fade_samples))
+            samples[i] = int(samples[i] * factor)
+            samples[num_samples - 1 - i] = int(samples[num_samples - 1 - i] * factor)
+        return struct.pack(f"<{num_samples}h", *samples)
+
     def _get_or_create_mobile_confirmation_audio(self, mobile: str) -> str:
         """
         Dynamically stitches 'gu/your_mobile_is.wav' + trimmed digits + 'gu/confirm_mobile_options.wav'
         into a single continuous audio file in cache.
-        This eliminates 10 separate AGI commands and 15 seconds of dead silence!
+        Timing:
+        - 250ms pause after 'your_mobile_is'
+        - 250ms gap after every 2 digits spoken (pairs: d1 d2 - 250ms - d3 d4 - 250ms ...)
+        - 60ms intra-pair gap between adjacent digits in each pair
+        - 250ms pause before 'confirm_mobile_options'
+        - Zero cracking: smooth cosine micro-fade + native .alaw and .slin generation
         """
         clean_num = re.sub(r"\D", "", mobile)
         cache_filename = f"conf_mobile_{clean_num}.wav"
@@ -71,28 +92,36 @@ class IVREngine:
             if os.path.exists(your_mobile_wav):
                 with wave.open(your_mobile_wav, "rb") as w:
                     params = w.getparams()
-                    frames.append(w.readframes(w.getnframes()))
-                    frames.append(b"\x00" * int(8000 * 2 * 0.15))  # 150ms pause
+                    frames.append(self._apply_microfade(w.readframes(w.getnframes())))
+                    frames.append(b"\x00" * int(8000 * 2 * 0.250))  # 250ms pause after prompt intro
 
-            for d in clean_num:
+            for idx, d in enumerate(clean_num, start=1):
                 d_wav = os.path.join(self.sounds_dir, "gu", "digits", f"{d}.wav")
                 if os.path.exists(d_wav):
                     with wave.open(d_wav, "rb") as w:
                         if not params:
                             params = w.getparams()
-                        frames.append(w.readframes(w.getnframes()))
-                        frames.append(b"\x00" * int(8000 * 2 * 0.08))  # 80ms pause
+                        digit_frames = w.readframes(w.getnframes())
+                        frames.append(self._apply_microfade(digit_frames))
+
+                        # 250ms gap after every 2 digits (idx 2, 4, 6, 8, 10), 60ms intra-pair gap
+                        if idx % 2 == 0:
+                            frames.append(b"\x00" * int(8000 * 2 * 0.250))  # 250ms gap
+                        else:
+                            frames.append(b"\x00" * int(8000 * 2 * 0.060))  # 60ms gap between digits in pair
 
             if os.path.exists(confirm_opts_wav):
                 with wave.open(confirm_opts_wav, "rb") as w:
-                    frames.append(b"\x00" * int(8000 * 2 * 0.20))  # 200ms pause
-                    frames.append(w.readframes(w.getnframes()))
+                    frames.append(b"\x00" * int(8000 * 2 * 0.250))  # 250ms pause before options
+                    frames.append(self._apply_microfade(w.readframes(w.getnframes())))
 
             if frames and params:
                 os.makedirs(os.path.dirname(full_cache_path), exist_ok=True)
                 with wave.open(full_cache_path, "wb") as out:
                     out.setparams(params)
                     out.writeframes(b"".join(frames))
+                ensure_alaw_file(full_cache_path)
+                ensure_slin_file(full_cache_path)
                 logger.info(f"Generated stitched mobile confirmation audio: {full_cache_path}")
 
         return f"{self.sounds_dir}/cache/conf_mobile_{clean_num}".replace("\\", "/")
