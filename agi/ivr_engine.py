@@ -376,8 +376,7 @@ class IVREngine:
             os.makedirs(cache_dir, exist_ok=True)
             rec_target = os.path.join(cache_dir, rec_filename).replace("\\", "/")
             rec_full_path = f"{rec_target}.wav"
-
-            await self.channel.record_file(rec_target, format_type="wav", escape_digits="#", timeout_ms=6000, beep=True, silence_sec=3)
+            await self.channel.record_file(rec_target, format_type="wav", escape_digits="#", timeout_ms=4500, beep=True, silence_sec=2)
 
             # Search across all possible cache directories to guarantee locating the audio file
             audio_to_transcribe = rec_full_path

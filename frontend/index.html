@@ -19,53 +19,54 @@
 
   <!-- Top Header Navigation -->
   <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-lg bg-sky-600 flex items-center justify-center text-white font-bold text-xl shadow-sm">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 sm:py-0 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-sky-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-sm flex-shrink-0">
           <i class="fa-solid fa-hospital-user"></i>
         </div>
         <div>
-          <h1 class="font-bold text-lg text-slate-900 leading-tight">ત્રિનય ઓર્થોપેડિક હોસ્પિટલ</h1>
-          <p class="text-xs text-slate-500">Trinay Orthopedic Hospital — Receptionist Portal</p>
+          <h1 class="font-bold text-base sm:text-lg text-slate-900 leading-tight">ત્રિનય ઓર્થોપેડિક હોસ્પિટલ</h1>
+          <p class="text-[11px] sm:text-xs text-slate-500 hidden sm:block">Trinay Orthopedic Hospital — Receptionist Portal</p>
         </div>
       </div>
 
-      <div class="flex items-center space-x-3">
+      <div class="flex items-center space-x-2 sm:space-x-3 ml-auto">
         <!-- Date Selector Widget in Header (Only when logged in) -->
-        <div x-show="isAuthenticated" class="flex items-center space-x-2 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg" x-cloak>
-          <i class="fa-regular fa-calendar-days text-sky-600 text-sm"></i>
+        <div x-show="isAuthenticated" class="flex items-center space-x-1 sm:space-x-2 bg-slate-100 border border-slate-200 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg" x-cloak>
+          <i class="fa-regular fa-calendar-days text-sky-600 text-xs sm:text-sm"></i>
           <span class="text-xs font-semibold text-slate-500 hidden md:inline">તારીખ:</span>
           <input 
             type="date" 
             x-model="selectedDate" 
             @change="fetchAppointments()" 
-            class="bg-transparent text-xs text-slate-800 font-bold focus:outline-none cursor-pointer">
+            class="bg-transparent text-xs text-slate-800 font-bold focus:outline-none cursor-pointer w-28 sm:w-auto">
           <button 
             x-show="!isTodaySelected" 
             @click="setTodayDate()" 
-            class="text-xs bg-sky-600 hover:bg-sky-700 text-white font-medium px-2 py-0.5 rounded shadow-sm transition-all"
+            class="text-[11px] sm:text-xs bg-sky-600 hover:bg-sky-700 text-white font-medium px-1.5 sm:px-2 py-0.5 rounded shadow-sm transition-all"
             title="આજની તારીખ પર જાઓ">
-            આજે (Today)
+            આજે
           </button>
         </div>
 
         <!-- Receptionist profile & Logout button (Only when logged in) -->
-        <div x-show="isAuthenticated" class="flex items-center space-x-3 border-l border-slate-200 pl-3" x-cloak>
-          <div class="flex items-center space-x-2">
-            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-sky-700 font-semibold text-xs">
+        <div x-show="isAuthenticated" class="flex items-center space-x-2 sm:space-x-3 border-l border-slate-200 pl-2 sm:pl-3" x-cloak>
+          <div class="flex items-center space-x-1.5 sm:space-x-2">
+            <span class="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-sky-100 text-sky-700 font-semibold text-xs flex-shrink-0">
               <i class="fa-solid fa-user-shield"></i>
             </span>
-            <div class="hidden md:block text-left">
+            <div class="hidden lg:block text-left">
               <span class="block text-xs font-bold text-slate-800 leading-tight">રિસેપ્શનિસ્ટ</span>
               <span class="block text-[10px] text-slate-500">trinay@2026</span>
             </div>
           </div>
           <button 
             @click="logout()" 
-            class="text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-medium px-2.5 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors shadow-sm cursor-pointer"
+            class="text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-medium px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg flex items-center space-x-1 sm:space-x-1.5 transition-colors shadow-sm cursor-pointer"
             title="લૉગ આઉટ કરો">
             <i class="fa-solid fa-arrow-right-from-bracket"></i>
-            <span>લૉગ આઉટ (Logout)</span>
+            <span class="hidden sm:inline">લૉગ આઉટ (Logout)</span>
+            <span class="sm:hidden">લૉગ આઉટ</span>
           </button>
         </div>
 
@@ -153,32 +154,32 @@
   <main x-show="isAuthenticated" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6" x-cloak>
 
     <!-- Tab Navigation Bar -->
-    <div class="flex items-center justify-between border-b border-slate-200 mb-6 bg-white px-4 pt-2 rounded-t-xl shadow-sm">
-      <nav class="flex space-x-6" aria-label="Tabs">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 mb-6 bg-white px-3 sm:px-4 pt-2 rounded-t-xl shadow-sm gap-2">
+      <nav class="flex space-x-3 sm:space-x-6 overflow-x-auto no-scrollbar py-1" aria-label="Tabs">
         <button 
           @click="activeTab = 'appointments'; fetchAppointments()"
           :class="activeTab === 'appointments' ? 'border-sky-600 text-sky-600 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-          class="py-3 px-1 border-b-2 text-sm flex items-center space-x-2 transition-all">
+          class="py-2.5 sm:py-3 px-1 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5 sm:space-x-2 transition-all whitespace-nowrap cursor-pointer">
           <i class="fa-solid fa-list-check"></i>
-          <span>એપોઇન્ટમેન્ટ્સ અને ટોકન લિસ્ટ (Appointments)</span>
-          <span class="ml-1.5 bg-sky-100 text-sky-700 text-xs px-2 py-0.5 rounded-full font-bold" x-text="stats.total"></span>
+          <span>એપોઇન્ટમેન્ટ્સ અને ટોકન્સ</span>
+          <span class="ml-1 bg-sky-100 text-sky-700 text-[11px] sm:text-xs px-2 py-0.5 rounded-full font-bold" x-text="stats.total"></span>
         </button>
 
         <button 
           @click="activeTab = 'schedules'; fetchSchedules()"
           :class="activeTab === 'schedules' ? 'border-sky-600 text-sky-600 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-          class="py-3 px-1 border-b-2 text-sm flex items-center space-x-2 transition-all">
+          class="py-2.5 sm:py-3 px-1 border-b-2 text-xs sm:text-sm flex items-center space-x-1.5 sm:space-x-2 transition-all whitespace-nowrap cursor-pointer">
           <i class="fa-solid fa-calendar-days"></i>
-          <span>ડૉક્ટર શિડ્યુલ અને સ્લોટ લિમિટ (Schedule Manager)</span>
+          <span>ડૉક્ટર શિડ્યુલ અને સ્લોટ્સ</span>
         </button>
       </nav>
 
-      <div class="pb-2">
+      <div class="pb-2 w-full sm:w-auto">
         <button 
           @click="openManualBookingModal()"
-          class="bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm flex items-center space-x-2 transition-all transform active:scale-95">
+          class="w-full sm:w-auto justify-center bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs sm:text-sm px-4 py-2 rounded-lg shadow-sm flex items-center space-x-2 transition-all transform active:scale-95 cursor-pointer">
           <i class="fa-solid fa-user-plus"></i>
-          <span>+ વૉક-ઇન દર્દી બુકિંગ (Book Walk-in)</span>
+          <span>+ વૉક-ઇન દર્દી બુકિંગ</span>
         </button>
       </div>
     </div>
@@ -242,97 +243,113 @@
       </div>
 
       <!-- Filters & Search Toolbar -->
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+      <div class="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4">
+        <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
           <!-- Date Filter -->
-          <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
-            <i class="fa-regular fa-calendar text-slate-400 text-sm"></i>
-            <input 
-              type="date" 
-              x-model="selectedDate" 
-              @change="fetchAppointments()"
-              class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
-            <button 
-              x-show="!isTodaySelected" 
-              @click="setTodayDate()" 
-              class="text-xs bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold px-2 py-1 rounded transition-all flex items-center space-x-1">
-              <i class="fa-solid fa-rotate-left text-xs"></i>
-              <span>આજે (Today)</span>
-            </button>
-            <button 
-              x-show="selectedDate" 
-              @click="setAllDates()" 
-              class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2 py-1 rounded transition-all flex items-center space-x-1"
-              title="Show all appointments across all dates">
-              <i class="fa-solid fa-list text-xs"></i>
-              <span>બધી તારીખો (All Dates)</span>
-            </button>
-            <span x-show="!selectedDate" class="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full">
-              🟣 બધી તારીખો
-            </span>
-            <span x-show="isTodaySelected" class="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">
-              🟢 આજે
-            </span>
+          <div class="flex items-center space-x-1.5 sm:space-x-2 bg-slate-50 border border-slate-200 px-2.5 sm:px-3 py-1.5 rounded-lg justify-between sm:justify-start">
+            <div class="flex items-center space-x-1.5">
+              <i class="fa-regular fa-calendar text-slate-400 text-xs sm:text-sm"></i>
+              <input 
+                type="date" 
+                x-model="selectedDate" 
+                @change="fetchAppointments()" 
+                class="bg-transparent text-xs sm:text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
+            </div>
+            <div class="flex items-center space-x-1">
+              <button 
+                x-show="!isTodaySelected" 
+                @click="setTodayDate()" 
+                class="text-[11px] sm:text-xs bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all flex items-center space-x-1">
+                <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                <span>આજે</span>
+              </button>
+              <button 
+                x-show="selectedDate" 
+                @click="setAllDates()" 
+                class="text-[11px] sm:text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all flex items-center space-x-1"
+                title="Show all appointments across all dates">
+                <i class="fa-solid fa-list text-[10px]"></i>
+                <span>બધા</span>
+              </button>
+            </div>
           </div>
 
           <!-- Doctor Filter -->
           <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
-            <i class="fa-solid fa-user-doctor text-slate-400 text-sm"></i>
+            <i class="fa-solid fa-user-doctor text-slate-400 text-xs sm:text-sm"></i>
             <select 
               x-model="selectedDoctorId" 
-              @change="fetchAppointments()"
-              class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
+              @change="fetchAppointments()" 
+              class="bg-transparent text-xs sm:text-sm text-slate-700 font-medium focus:outline-none cursor-pointer w-full">
               <option value="">બધા ડૉક્ટર (All Doctors)</option>
               <option value="1">ડૉક્ટર શૈશવ સોની (Dr. Shaishav Soni)</option>
               <option value="2">ડૉક્ટર જયદીપ પટેલ (Dr. Jaydeep Patel)</option>
             </select>
           </div>
 
-          <!-- Shift Filter Tabs (Section 5.2 requirement) -->
-          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1">
+          <!-- Shift Filter Tabs -->
+          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1 w-full sm:w-auto justify-between">
             <button 
               @click="selectedShift = ''"
               :class="selectedShift === '' ? 'bg-white text-slate-900 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-              class="px-3 py-1.5 rounded-md text-xs transition-all flex items-center space-x-1.5 cursor-pointer">
-              <span>બધા (All)</span>
-              <span class="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[11px]" x-text="stats.total"></span>
+              class="flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer">
+              <span>બધા</span>
+              <span class="bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full text-[10px]" x-text="stats.total"></span>
             </button>
 
             <button 
               @click="selectedShift = 'MORNING'"
               :class="selectedShift === 'MORNING' ? 'bg-amber-500 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-              class="px-3 py-1.5 rounded-md text-xs transition-all flex items-center space-x-1.5 cursor-pointer">
+              class="flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer">
               <i class="fa-solid fa-sun" :class="selectedShift === 'MORNING' ? 'text-white' : 'text-amber-500'"></i>
-              <span>☀️ સવાર (Morning)</span>
-              <span :class="selectedShift === 'MORNING' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'" class="px-1.5 py-0.5 rounded-full text-[11px]" x-text="stats.morning"></span>
+              <span>☀️ સવાર</span>
+              <span :class="selectedShift === 'MORNING' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'" class="px-1.5 py-0.2 rounded-full text-[10px]" x-text="stats.morning"></span>
             </button>
 
             <button 
               @click="selectedShift = 'EVENING'"
               :class="selectedShift === 'EVENING' ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-              class="px-3 py-1.5 rounded-md text-xs transition-all flex items-center space-x-1.5 cursor-pointer">
+              class="flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer">
               <i class="fa-solid fa-moon" :class="selectedShift === 'EVENING' ? 'text-white' : 'text-indigo-400'"></i>
-              <span>🌙 સાંજ (Evening)</span>
-              <span :class="selectedShift === 'EVENING' ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-800'" class="px-1.5 py-0.5 rounded-full text-[11px]" x-text="stats.evening"></span>
+              <span>🌙 સાંજ</span>
+              <span :class="selectedShift === 'EVENING' ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-800'" class="px-1.5 py-0.2 rounded-full text-[10px]" x-text="stats.evening"></span>
             </button>
           </div>
         </div>
 
         <!-- Search Input -->
-        <div class="relative w-full md:w-80">
+        <div class="relative w-full lg:w-80">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
           <input 
             type="text" 
             x-model="searchQuery" 
-            @input.debounce.300ms="fetchAppointments()"
+            @input.debounce.300ms="fetchAppointments()" 
             placeholder="નામ, મોબાઇલ અથવા ટોકન શોધો..."
-            class="w-full bg-slate-50 border border-slate-200 pl-9 pr-4 py-2 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all">
+            class="w-full bg-slate-50 border border-slate-200 pl-9 pr-4 py-2 rounded-lg text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition-all">
         </div>
       </div>
 
-      <!-- Appointments Table -->
+      <!-- Appointments Container: Desktop Table + Mobile Cards -->
       <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
+        
+        <!-- Loading State -->
+        <template x-if="loadingAppts">
+          <div class="py-12 text-center text-slate-400">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-sky-600 mb-2"></i>
+            <p class="text-xs">લોડ થઈ રહ્યું છે...</p>
+          </div>
+        </template>
+
+        <!-- Empty State -->
+        <template x-if="!loadingAppts && filteredAppointments.length === 0">
+          <div class="py-12 text-center text-slate-400">
+            <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i>
+            <p class="text-sm">કોઈ એપોઇન્ટમેન્ટ મળી નથી (No appointments found)</p>
+          </div>
+        </template>
+
+        <!-- 1. DESKTOP VIEW: Full Table (Visible on md and larger) -->
+        <div x-show="!loadingAppts && filteredAppointments.length > 0" class="hidden md:block overflow-x-auto">
           <table class="w-full text-left border-collapse dashboard-table">
             <thead>
               <tr class="border-b border-slate-200 text-slate-600 font-semibold text-xs">
@@ -348,24 +365,6 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
-              <template x-if="loadingAppts">
-                <tr>
-                  <td colspan="9" class="py-12 text-center text-slate-400">
-                    <i class="fa-solid fa-spinner fa-spin text-2xl text-sky-600 mb-2"></i>
-                    <p class="text-xs">લોડ થઈ રહ્યું છે...</p>
-                  </td>
-                </tr>
-              </template>
-
-              <template x-if="!loadingAppts && filteredAppointments.length === 0">
-                <tr>
-                  <td colspan="9" class="py-12 text-center text-slate-400">
-                    <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i>
-                    <p>કોઈ એપોઇન્ટમેન્ટ મળી નથી (No appointments found)</p>
-                  </td>
-                </tr>
-              </template>
-
               <template x-for="appt in filteredAppointments" :key="appt.id">
                 <tr class="hover:bg-slate-50/80 transition-all">
                   <td class="py-3.5 px-4 font-bold">
@@ -384,7 +383,9 @@
                     </span>
                   </td>
                   <td class="py-3.5 px-4 font-semibold text-slate-900" x-text="appt.patient_name_gu"></td>
-                  <td class="py-3.5 px-4 font-mono text-slate-600" x-text="appt.mobile_number"></td>
+                  <td class="py-3.5 px-4 font-mono text-slate-600">
+                    <a :href="'tel:' + appt.mobile_number" class="hover:text-sky-600 hover:underline" x-text="appt.mobile_number"></a>
+                  </td>
                   <td class="py-3.5 px-4 font-medium text-slate-700">
                     <i class="fa-regular fa-clock text-sky-600 mr-1 text-xs"></i>
                     <span x-text="appt.slot_time"></span>
@@ -437,6 +438,86 @@
             </tbody>
           </table>
         </div>
+
+        <!-- 2. MOBILE VIEW: Touch-Friendly Responsive Cards (Visible on screens smaller than md) -->
+        <div x-show="!loadingAppts && filteredAppointments.length > 0" class="block md:hidden divide-y divide-slate-100">
+          <template x-for="appt in filteredAppointments" :key="appt.id">
+            <div class="p-3.5 sm:p-4 space-y-2.5 hover:bg-slate-50 transition-all">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <span 
+                    :class="(appt.shift || 'MORNING') === 'MORNING' ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'"
+                    class="px-2.5 py-0.5 rounded-md text-xs font-mono font-bold tracking-wider shadow-sm"
+                    x-text="appt.appointment_code">
+                  </span>
+                  <span 
+                    :class="(appt.shift || 'MORNING') === 'MORNING' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-indigo-50 text-indigo-800 border-indigo-200'"
+                    class="px-2 py-0.5 rounded-full text-[11px] font-bold border inline-flex items-center gap-1">
+                    <i :class="(appt.shift || 'MORNING') === 'MORNING' ? 'fa-solid fa-sun text-amber-500' : 'fa-solid fa-moon text-indigo-500'"></i>
+                    <span x-text="(appt.shift || 'MORNING') === 'MORNING' ? 'સવાર' : 'સાંજ'"></span>
+                  </span>
+                </div>
+                <span 
+                  :class="{
+                    'badge-confirmed': appt.status === 'CONFIRMED',
+                    'badge-completed': appt.status === 'COMPLETED' || appt.status === 'CHECKED_IN',
+                    'badge-cancelled': appt.status === 'CANCELLED'
+                  }"
+                  class="px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                  x-text="appt.status === 'CONFIRMED' ? 'કન્ફર્મ' : (appt.status === 'COMPLETED' ? 'પૂર્ણ' : (appt.status === 'CHECKED_IN' ? 'હાજર' : 'રદ'))">
+                </span>
+              </div>
+
+              <div>
+                <h4 class="font-bold text-slate-900 text-sm sm:text-base leading-snug" x-text="appt.patient_name_gu"></h4>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 mt-1">
+                  <a :href="'tel:' + appt.mobile_number" class="text-sky-600 font-mono font-bold hover:underline inline-flex items-center gap-1">
+                    <i class="fa-solid fa-phone text-[10px]"></i>
+                    <span x-text="appt.mobile_number"></span>
+                  </a>
+                  <span class="text-slate-300">•</span>
+                  <span class="inline-flex items-center gap-1 text-slate-700">
+                    <i class="fa-solid fa-user-doctor text-slate-400 text-[11px]"></i>
+                    <span x-text="appt.doctor_name_gu"></span>
+                  </span>
+                </div>
+                <div class="text-[11px] sm:text-xs text-slate-500 mt-1 flex items-center gap-2">
+                  <span class="inline-flex items-center gap-1">
+                    <i class="fa-regular fa-clock text-sky-600"></i>
+                    <span x-text="appt.slot_time"></span>
+                  </span>
+                  <span 
+                    :class="appt.source === 'IVR' ? 'badge-ivr' : 'badge-manual'"
+                    class="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase"
+                    x-text="appt.source">
+                  </span>
+                </div>
+              </div>
+
+              <!-- Quick Action Buttons for Mobile -->
+              <div class="flex items-center space-x-2 pt-2 border-t border-slate-100">
+                <button 
+                  x-show="appt.status === 'CONFIRMED'"
+                  @click="updateStatus(appt.id, 'CHECKED_IN')"
+                  class="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs rounded-lg font-bold border border-emerald-200 text-center transition-all cursor-pointer">
+                  <i class="fa-solid fa-check mr-1"></i>હાજર
+                </button>
+                <button 
+                  x-show="appt.status === 'CHECKED_IN'"
+                  @click="updateStatus(appt.id, 'COMPLETED')"
+                  class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-lg font-bold border border-slate-300 text-center transition-all cursor-pointer">
+                  પૂર્ણ (Completed)
+                </button>
+                <button 
+                  x-show="appt.status !== 'CANCELLED' && appt.status !== 'COMPLETED'"
+                  @click="updateStatus(appt.id, 'CANCELLED')"
+                  class="py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs rounded-lg font-semibold border border-rose-200 text-center transition-all cursor-pointer">
+                  રદ કરો
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -446,55 +527,55 @@
     <div x-show="activeTab === 'schedules'" class="space-y-6">
 
       <!-- Controls Toolbar (Section 5.1 requirements) -->
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+      <div class="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4">
+        <div class="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full lg:w-auto">
           <!-- Schedule Date Picker -->
-          <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+          <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex-1 sm:flex-initial min-w-[150px]">
             <i class="fa-regular fa-calendar-check text-sky-600 text-sm"></i>
             <span class="text-xs text-slate-500 font-semibold">તારીખ:</span>
             <input 
               type="date" 
               x-model="scheduleDate" 
               @change="fetchSchedules()"
-              class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
+              class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer w-full">
           </div>
 
           <!-- Doctor Selector -->
-          <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+          <div class="flex items-center space-x-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg flex-1 sm:flex-initial min-w-[200px]">
             <i class="fa-solid fa-user-doctor text-sky-600 text-sm"></i>
             <select 
               x-model.number="scheduleDoctorId" 
               @change="fetchSchedules()"
-              class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer">
+              class="bg-transparent text-sm text-slate-700 font-medium focus:outline-none cursor-pointer w-full">
               <option :value="1">ડૉક્ટર શૈશવ સોની (Dr. Shaishav Soni)</option>
               <option :value="2">ડૉક્ટર જયદીપ પટેલ (Dr. Jaydeep Patel)</option>
             </select>
           </div>
 
           <!-- Shift Toggle Buttons (Section 5.1 Requirement) -->
-          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1">
+          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1 w-full sm:w-auto overflow-x-auto no-scrollbar">
             <button 
               @click="scheduleShift = 'MORNING'"
               :class="scheduleShift === 'MORNING' ? 'bg-amber-500 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-              class="px-4 py-1.5 rounded-md text-xs transition-all flex items-center space-x-1.5 cursor-pointer">
+              class="flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 rounded-md text-xs transition-all flex items-center justify-center space-x-1.5 cursor-pointer whitespace-nowrap">
               <i class="fa-solid fa-sun" :class="scheduleShift === 'MORNING' ? 'text-white' : 'text-amber-500'"></i>
-              <span>☀️ Morning Slot (સવાર)</span>
-              <span :class="scheduleShift === 'MORNING' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'" class="px-1.5 py-0.5 rounded-full text-[11px]" x-text="morningCapacity + ' slots'"></span>
+              <span>☀️ સવાર (Morning)</span>
+              <span :class="scheduleShift === 'MORNING' ? 'bg-amber-600 text-white' : 'bg-amber-100 text-amber-800'" class="px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px]" x-text="morningCapacity + ' slots'"></span>
             </button>
 
             <button 
               @click="scheduleShift = 'EVENING'"
               :class="scheduleShift === 'EVENING' ? 'bg-indigo-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-              class="px-4 py-1.5 rounded-md text-xs transition-all flex items-center space-x-1.5 cursor-pointer">
+              class="flex-1 sm:flex-initial px-3 sm:px-4 py-1.5 rounded-md text-xs transition-all flex items-center justify-center space-x-1.5 cursor-pointer whitespace-nowrap">
               <i class="fa-solid fa-moon" :class="scheduleShift === 'EVENING' ? 'text-white' : 'text-indigo-400'"></i>
-              <span>🌙 Evening Slot (સાંજ)</span>
-              <span :class="scheduleShift === 'EVENING' ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-800'" class="px-1.5 py-0.5 rounded-full text-[11px]" x-text="eveningCapacity + ' slots'"></span>
+              <span>🌙 સાંજ (Evening)</span>
+              <span :class="scheduleShift === 'EVENING' ? 'bg-indigo-700 text-white' : 'bg-indigo-100 text-indigo-800'" class="px-1.5 py-0.5 rounded-full text-[10px] sm:text-[11px]" x-text="eveningCapacity + ' slots'"></span>
             </button>
 
             <button 
               @click="scheduleShift = 'ALL'"
               :class="scheduleShift === 'ALL' ? 'bg-white text-slate-900 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-              class="px-3 py-1.5 rounded-md text-xs transition-all flex items-center space-x-1 cursor-pointer">
+              class="px-2.5 sm:px-3 py-1.5 rounded-md text-xs transition-all flex items-center justify-center space-x-1 cursor-pointer whitespace-nowrap">
               <span>બધા (All)</span>
             </button>
           </div>
@@ -502,7 +583,7 @@
 
         <button 
           @click="openCustomSlotModal()"
-          class="bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm px-4 py-2 rounded-lg shadow-sm flex items-center space-x-2 transition-all cursor-pointer">
+          class="bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs sm:text-sm px-4 py-2.5 rounded-lg shadow-sm flex items-center justify-center space-x-2 transition-all cursor-pointer w-full lg:w-auto">
           <i class="fa-solid fa-plus text-xs"></i>
           <span>+ ૧ કલાકનો સ્લોટ ઉમેરો (+ Add 1-Hour Slot)</span>
         </button>

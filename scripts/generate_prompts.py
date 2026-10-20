@@ -172,7 +172,7 @@ def main():
     digits_dir = os.path.join(target_dir, "digits")
     os.makedirs(digits_dir, exist_ok=True)
     DIGITS_MAP = {
-        "0": "ઝીરો",
+        "0": "શૂન્ય",
         "1": "એક",
         "2": "બે",
         "3": "ત્રણ",
@@ -189,6 +189,8 @@ def main():
         if os.path.exists(gen_path):
             with open(gen_path, "rb") as src, open(digit_wav, "wb") as dst:
                 dst.write(src.read())
+            ensure_alaw_file(digit_wav)
+            ensure_slin_file(digit_wav)
             logger.info(f"Generated digit '{digit}' ({gu_word}) -> {digit_wav}")
 
     # Generate reception prompts with exactly 1.0 second per digit

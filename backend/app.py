@@ -27,11 +27,23 @@ logger = logging.getLogger("DashboardBackend")
 
 app = FastAPI(title="Trinay Hospital Receptionist Dashboard API", version="2.0.0")
 
+ALLOWED_ORIGINS = [
+    "https://reception.trinayorthopedic.com",
+    "http://reception.trinayorthopedic.com",
+    "https://trinayorthopedic.com",
+    "http://trinayorthopedic.com",
+    "http://187.127.181.66",
+    "https://187.127.181.66",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
