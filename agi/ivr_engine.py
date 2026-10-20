@@ -73,9 +73,9 @@ class IVREngine:
         Dynamically stitches 'gu/your_mobile_is.wav' + trimmed digits + 'gu/confirm_mobile_options.wav'
         into a single continuous audio file in cache.
         Timing:
-        - 250ms pause after 'your_mobile_is'
-        - 200ms clear break after every single digit spoken
-        - 250ms pause before 'confirm_mobile_options'
+        - 350ms pause after 'your_mobile_is'
+        - 450ms calm, clear break after every single digit spoken
+        - 350ms pause before 'confirm_mobile_options'
         - Zero cracking: smooth cosine micro-fade + native .alaw and .slin generation
         """
         clean_num = re.sub(r"\D", "", mobile)
@@ -92,7 +92,7 @@ class IVREngine:
                 with wave.open(your_mobile_wav, "rb") as w:
                     params = w.getparams()
                     frames.append(self._apply_microfade(w.readframes(w.getnframes())))
-                    frames.append(b"\x00" * int(8000 * 2 * 0.250))  # 250ms pause after prompt intro
+                    frames.append(b"\x00" * int(8000 * 2 * 0.350))  # 350ms pause after prompt intro
 
             for idx, d in enumerate(clean_num, start=1):
                 d_wav = os.path.join(self.sounds_dir, "gu", "digits", f"{d}.wav")
@@ -103,12 +103,12 @@ class IVREngine:
                         digit_frames = w.readframes(w.getnframes())
                         frames.append(self._apply_microfade(digit_frames))
 
-                        # 200ms clear break after every single digit
-                        frames.append(b"\x00" * int(8000 * 2 * 0.200))
+                        # 450ms calm, clear break after every single digit
+                        frames.append(b"\x00" * int(8000 * 2 * 0.450))
 
             if os.path.exists(confirm_opts_wav):
                 with wave.open(confirm_opts_wav, "rb") as w:
-                    frames.append(b"\x00" * int(8000 * 2 * 0.250))  # 250ms pause before options
+                    frames.append(b"\x00" * int(8000 * 2 * 0.350))  # 350ms pause before options
                     frames.append(self._apply_microfade(w.readframes(w.getnframes())))
 
             if frames and params:
