@@ -74,8 +74,7 @@ class IVREngine:
         into a single continuous audio file in cache.
         Timing:
         - 250ms pause after 'your_mobile_is'
-        - 250ms gap after every 2 digits spoken (pairs: d1 d2 - 250ms - d3 d4 - 250ms ...)
-        - 60ms intra-pair gap between adjacent digits in each pair
+        - 200ms clear break after every single digit spoken
         - 250ms pause before 'confirm_mobile_options'
         - Zero cracking: smooth cosine micro-fade + native .alaw and .slin generation
         """
@@ -104,11 +103,8 @@ class IVREngine:
                         digit_frames = w.readframes(w.getnframes())
                         frames.append(self._apply_microfade(digit_frames))
 
-                        # 250ms gap after every 2 digits (idx 2, 4, 6, 8, 10), 60ms intra-pair gap
-                        if idx % 2 == 0:
-                            frames.append(b"\x00" * int(8000 * 2 * 0.250))  # 250ms gap
-                        else:
-                            frames.append(b"\x00" * int(8000 * 2 * 0.060))  # 60ms gap between digits in pair
+                        # 200ms clear break after every single digit
+                        frames.append(b"\x00" * int(8000 * 2 * 0.200))
 
             if os.path.exists(confirm_opts_wav):
                 with wave.open(confirm_opts_wav, "rb") as w:
